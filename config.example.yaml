@@ -1,0 +1,38 @@
+# Warframe Bot 配置示例 — 复制为 config.yaml 后修改
+
+prefix:
+  - "wf "
+  - "/"
+
+# 日志级别: fatal | error | warn | info | debug | trace
+logLevel: info
+
+# Warframestat API
+api:
+  baseUrl: "https://api.warframestat.us"
+  platform: "pc"          # pc | ps4 | xb1 | swi
+  language: "zh"
+  cacheTtlMs: 30000       # 世界状态缓存 TTL
+
+# 推送
+push:
+  enabled: true
+  intervalMs: 60000       # 轮询间隔 60s
+  sqlitePath: "./data/bot.db"
+
+# OneBot v11（NapCat / go-cqhttp / Lagrange）
+onebot:
+  enabled: true
+  # 接收事件的 HTTP 服务
+  host: "0.0.0.0"
+  port: 6700
+  accessToken: ""         # 可选，与反向 HTTP 上报的 token 一致
+  # 发送消息的 OneBot HTTP API
+  apiBase: "http://127.0.0.1:5700"
+  apiAccessToken: ""      # 可选，API 鉴权 token
+
+# KOOK 官方 Bot
+kook:
+  enabled: false
+  token: ""               # Bot Token（来自开发者后台）
+  # compress: true        # 网关是否压缩（默认 true）
