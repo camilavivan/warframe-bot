@@ -3,11 +3,14 @@ import { loadConfig } from '../config.js';
 import {
   fetchAlerts,
   fetchArbitration,
+  fetchArchimedeas,
   fetchArchonHunt,
+  fetchCalendar,
   fetchCambionCycle,
   fetchCetusCycle,
   fetchConstruction,
   fetchDailyDeals,
+  fetchDuviriCycle,
   fetchEarthCycle,
   fetchEvents,
   fetchFissures,
@@ -26,11 +29,14 @@ import {
   filterFissures,
   formatAlerts,
   formatArbitration,
+  formatArchimedeas,
   formatArchonHunt,
   formatBounties,
+  formatCalendar,
   formatConstruction,
   formatCycle,
   formatDailyDeals,
+  formatDuviri,
   formatEvents,
   formatFissures,
   formatInvasions,
@@ -244,6 +250,33 @@ export function registerAllCommands(): void {
     description: '执刑官猎杀',
     async handle(ctx) {
       await ctx.reply(formatArchonHunt(await fetchArchonHunt()));
+    },
+  });
+
+  registerCommand({
+    name: '日历',
+    aliases: ['1999', 'hex日历', 'hexcalendar', 'calendar'],
+    description: '1999 Hex 日历',
+    async handle(ctx) {
+      await ctx.reply(formatCalendar(await fetchCalendar()));
+    },
+  });
+
+  registerCommand({
+    name: '深层',
+    aliases: ['deep', 'archimedea', '研习', '时空研习'],
+    description: '深层研习 / 时空研习 Archimedea',
+    async handle(ctx) {
+      await ctx.reply(formatArchimedeas(await fetchArchimedeas()));
+    },
+  });
+
+  registerCommand({
+    name: '双衍王境',
+    aliases: ['duviri', 'circuit', '回路', '王境'],
+    description: '双衍王境情绪与回路选项',
+    async handle(ctx) {
+      await ctx.reply(formatDuviri(await fetchDuviriCycle()));
     },
   });
 

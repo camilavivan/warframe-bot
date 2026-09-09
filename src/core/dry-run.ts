@@ -4,15 +4,33 @@
 import { loadConfig } from '../config.js';
 import {
   fetchArbitration,
+  fetchArchimedeas,
+  fetchArchonHunt,
+  fetchCalendar,
   fetchCetusCycle,
   fetchEarthCycle,
   fetchFissures,
+  fetchDuviriCycle,
+  fetchNightwave,
   fetchSortie,
   fetchVallisCycle,
   fetchCambionCycle,
+  fetchVoidTrader,
   fetchZarimanCycle,
 } from './warframestat.js';
-import { filterFissures, formatArbitration, formatCycle, formatFissures, formatSortie } from './formatters.js';
+import {
+  filterFissures,
+  formatArbitration,
+  formatArchimedeas,
+  formatArchonHunt,
+  formatCalendar,
+  formatCycle,
+  formatDuviri,
+  formatFissures,
+  formatNightwave,
+  formatSortie,
+  formatVoidTrader,
+} from './formatters.js';
 
 async function main(): Promise<void> {
   loadConfig();
@@ -35,6 +53,8 @@ async function main(): Promise<void> {
   console.log('');
   console.log(formatFissures(filterFissures(fissures, { hard: true }), '钢铁裂缝'));
   console.log('');
+  console.log(formatFissures(filterFissures(fissures, { storm: true }), '虚空风暴'));
+  console.log('');
 
   console.log(formatCycle(await fetchCetusCycle(), '平原（希图斯）'));
   console.log('');
@@ -48,6 +68,48 @@ async function main(): Promise<void> {
     console.log(formatCycle(await fetchZarimanCycle(), '扎里曼'));
   } catch (e) {
     console.log('【扎里曼】获取失败：', (e as Error).message);
+  }
+  console.log('');
+
+  try {
+    console.log(formatCalendar(await fetchCalendar()));
+  } catch (e) {
+    console.log('【日历】获取失败：', (e as Error).message);
+  }
+  console.log('');
+
+  try {
+    console.log(formatArchimedeas(await fetchArchimedeas()));
+  } catch (e) {
+    console.log('【深层研习】获取失败：', (e as Error).message);
+  }
+  console.log('');
+
+  try {
+    console.log(formatDuviri(await fetchDuviriCycle()));
+  } catch (e) {
+    console.log('【双衍王境】获取失败：', (e as Error).message);
+  }
+  console.log('');
+
+  try {
+    console.log(formatArchonHunt(await fetchArchonHunt()));
+  } catch (e) {
+    console.log('【猎杀】获取失败：', (e as Error).message);
+  }
+  console.log('');
+
+  try {
+    console.log(formatVoidTrader(await fetchVoidTrader()));
+  } catch (e) {
+    console.log('【奸商】获取失败：', (e as Error).message);
+  }
+  console.log('');
+
+  try {
+    console.log(formatNightwave(await fetchNightwave()));
+  } catch (e) {
+    console.log('【电波】获取失败：', (e as Error).message);
   }
 
   console.log('\n=== Dry-Run 完成 ===');

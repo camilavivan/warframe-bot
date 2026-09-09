@@ -5,6 +5,7 @@ import { getDb } from './push/db.js';
 import { startPoller } from './push/poller.js';
 import { startOneBot, type OneBotAdapter } from './adapters/onebot/server.js';
 import { startKook, type KookAdapter } from './adapters/kook/client.js';
+import { startHealthServer, type HealthServer } from './health.js';
 
 async function main(): Promise<void> {
   const cfg = loadConfig();
@@ -13,12 +14,16 @@ async function main(): Promise<void> {
 
   let onebot: OneBotAdapter | null = null;
   let kook: KookAdapter | null = null;
+  let health: HealthServer | null = null;
 
   if (cfg.onebot.enabled) {
     onebot = await startOneBot(cfg.onebot);
   } else {
     logger.info('OneBot adapter disabled');
   }
+
+  // Health always available: dedicated server when OneBot off or different port
+  health = await startHealthServer(cfg);
 
   if (cfg.kook.enabled) {
     kook = await startKook(cfg.kook);
@@ -53,10 +58,18 @@ async function main(): Promise<void> {
     startPoller(cfg.push.intervalMs, send);
   }
 
-  logger.info('warframe-bot started');
+  logger.info(
+    {
+      healthPort: cfg.health.port,
+      onebot: cfg.onebot.enabled,
+      kook: cfg.kook.enabled,
+    },
+    'warframe-bot started',
+  );
 
   const shutdown = async () => {
     logger.info('shutting down');
+    await health?.close();
     await onebot?.close();
     await kook?.close();
     process.exit(0);

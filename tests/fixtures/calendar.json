@@ -1,0 +1,85 @@
+{
+  "activation": "2026-09-07T00:00:00.000Z",
+  "expiry": "2026-09-14T00:00:00.000Z",
+  "season": "Summer",
+  "yearIteration": 22,
+  "version": 19,
+  "days": [
+    {
+      "date": "1999-07-04T00:00:00.000Z",
+      "events": [
+        {
+          "type": "To Do",
+          "challenge": {
+            "title": "Shock and Awe",
+            "description": "Kill 75 Scaldra Troops with Abilities"
+          }
+        }
+      ]
+    },
+    {
+      "date": "1999-07-09T00:00:00.000Z",
+      "events": [
+        {
+          "type": "Big Prize!",
+          "reward": "6000 x Kuva"
+        },
+        {
+          "type": "Big Prize!",
+          "reward": "Arcane Enhancements: Double Pack"
+        }
+      ]
+    },
+    {
+      "date": "1999-07-11T00:00:00.000Z",
+      "events": [
+        {
+          "type": "To Do",
+          "challenge": {
+            "title": "Purge the infection",
+            "description": "Kill 250 Techrot"
+          }
+        }
+      ]
+    },
+    {
+      "date": "1999-07-23T00:00:00.000Z",
+      "events": [
+        {
+          "type": "Big Prize!",
+          "reward": "6,000 Endo"
+        },
+        {
+          "type": "Big Prize!",
+          "reward": "2000 x Kuva"
+        }
+      ]
+    },
+    {
+      "date": "1999-07-31T00:00:00.000Z",
+      "events": [
+        {
+          "type": "Override",
+          "upgrade": {
+            "title": "Practiced Precision",
+            "description": "+20% Melee Critical Chance (x2 for Heavy Attacks)."
+          }
+        },
+        {
+          "type": "Override",
+          "upgrade": {
+            "title": "Broadened Horizons",
+            "description": "On Energy Pickup increase ability range by 10% for 10s."
+          }
+        },
+        {
+          "type": "Override",
+          "upgrade": {
+            "title": "Emergency Medicine",
+            "description": "All restoration effects provided by Orb pickups increased by 25%."
+          }
+        }
+      ]
+    }
+  ]
+}

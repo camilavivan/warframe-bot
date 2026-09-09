@@ -29,6 +29,13 @@ export interface WorldState {
   archonHunt?: ArchonHunt;
   steelPath?: { currentReward?: { name?: string }; remaining?: number; activation?: string; expiry?: string };
   kuva?: unknown[];
+  /** 1999 Hex calendar */
+  calendar?: Calendar1999;
+  /** Deep / Temporal Archimedea (API field name is plural) */
+  archimedeas?: Archimedea[];
+  duviriCycle?: DuviriCycle;
+  vaultTrader?: VoidTrader;
+  voidTraders?: VoidTrader[];
   [key: string]: unknown;
 }
 
@@ -121,10 +128,127 @@ export interface VoidTrader {
   location?: string;
   activation?: string;
   expiry?: string;
+  /** Some API builds omit this — derive from activation/expiry when missing */
   active?: boolean;
   inventory?: Array<{ item?: string; ducats?: number; credits?: number }>;
   startString?: string;
   endString?: string;
+  schedule?: unknown[];
+}
+
+/** True when Baro is currently at a relay (handles missing `active` field). */
+export function isVoidTraderActive(v: VoidTrader | null | undefined): boolean {
+  if (!v) return false;
+  if (typeof v.active === 'boolean') return v.active;
+  const now = Date.now();
+  const start = v.activation ? new Date(v.activation).getTime() : NaN;
+  const end = v.expiry ? new Date(v.expiry).getTime() : NaN;
+  if (!Number.isNaN(start) && !Number.isNaN(end)) {
+    return now >= start && now < end;
+  }
+  return Array.isArray(v.inventory) && v.inventory.length > 0;
+}
+
+export interface CalendarChallenge {
+  title?: string;
+  description?: string;
+}
+
+export interface CalendarUpgrade {
+  title?: string;
+  description?: string;
+}
+
+export interface CalendarEvent {
+  type?: string;
+  challenge?: CalendarChallenge;
+  reward?: string;
+  upgrade?: CalendarUpgrade;
+}
+
+export interface CalendarDay {
+  /** In-game 1999 date ISO string */
+  date?: string;
+  events?: CalendarEvent[];
+}
+
+export interface Calendar1999 {
+  id?: string;
+  activation?: string;
+  expiry?: string;
+  season?: string;
+  yearIteration?: number;
+  version?: number;
+  days?: CalendarDay[];
+  requirements?: string[];
+}
+
+export interface ArchimedeaRisk {
+  key?: string;
+  name?: string;
+  description?: string;
+  isHard?: boolean;
+}
+
+export interface ArchimedeaDeviation {
+  key?: string;
+  name?: string;
+  description?: string;
+}
+
+export interface ArchimedeaMission {
+  faction?: string;
+  factionKey?: string;
+  missionType?: string;
+  missionTypeKey?: string;
+  deviation?: ArchimedeaDeviation;
+  risks?: ArchimedeaRisk[];
+}
+
+export interface ArchimedeaModifier {
+  key?: string;
+  name?: string;
+  description?: string;
+}
+
+export interface Archimedea {
+  id?: string;
+  activation?: string;
+  expiry?: string;
+  /** Often spaced like "C T_ L A B" — normalize by stripping spaces */
+  type?: string;
+  typeKey?: string;
+  missions?: ArchimedeaMission[];
+  personalModifiers?: ArchimedeaModifier[];
+}
+
+export interface DuviriChoiceGroup {
+  category?: string;
+  categoryKey?: string;
+  choices?: string[];
+}
+
+export interface DuviriCycle {
+  id?: string;
+  activation?: string;
+  expiry?: string;
+  state?: string;
+  choices?: DuviriChoiceGroup[];
+}
+
+/** Normalize archimedea typeKey: "C T_ L A B" → "CT_LAB" */
+export function normalizeArchimedeaType(typeOrKey?: string): string {
+  return (typeOrKey || '').replace(/\s+/g, '').toUpperCase();
+}
+
+export function isDeepArchimedea(a: Archimedea): boolean {
+  const t = normalizeArchimedeaType(a.typeKey || a.type);
+  return t === 'CT_LAB' || t.includes('LAB');
+}
+
+export function isTemporalArchimedea(a: Archimedea): boolean {
+  const t = normalizeArchimedeaType(a.typeKey || a.type);
+  return t === 'CT_HEX' || (t.includes('HEX') && !t.includes('LAB'));
 }
 
 export interface DailyDeal {
@@ -327,6 +451,18 @@ export async function fetchCambionCycle(): Promise<Cycle> {
 
 export async function fetchZarimanCycle(): Promise<Cycle> {
   return getJson('/zarimanCycle');
+}
+
+export async function fetchCalendar(): Promise<Calendar1999> {
+  return getJson('/calendar');
+}
+
+export async function fetchArchimedeas(): Promise<Archimedea[]> {
+  return getJson('/archimedeas');
+}
+
+export async function fetchDuviriCycle(): Promise<DuviriCycle> {
+  return getJson('/duviriCycle');
 }
 
 /** Warframe.market item orders (language-agnostic url_name) */

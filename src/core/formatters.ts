@@ -1,10 +1,13 @@
 import type {
   AlertItem,
   Arbitration,
+  Archimedea,
   ArchonHunt,
+  Calendar1999,
   ConstructionProgress,
   Cycle,
   DailyDeal,
+  DuviriCycle,
   EventItem,
   Fissure,
   Invasion,
@@ -14,6 +17,11 @@ import type {
   SyndicateMission,
   VoidTrader,
   WmItemResult,
+} from './warframestat.js';
+import {
+  isDeepArchimedea,
+  isTemporalArchimedea,
+  isVoidTraderActive,
 } from './warframestat.js';
 import { zh, zhNode } from './locale-zh.js';
 
@@ -128,13 +136,18 @@ export function formatAlerts(list: AlertItem[]): string {
 
 export function formatVoidTrader(v: VoidTrader | null | undefined): string {
   if (!v) return '无奸商信息。';
-  if (v.active) {
+  if (isVoidTraderActive(v)) {
     const lines = [
       `【奸商】${v.character ?? 'Baro'} 已抵达 ${v.location ?? '?'}`,
       `离开倒计时：${formatEta(v.endString, v.expiry)}`,
     ];
-    for (const item of (v.inventory || []).slice(0, 30)) {
-      lines.push(`· ${item.item ?? '?'} — ${item.ducats ?? 0} 杜卡币 / ${item.credits ?? 0} 现金`);
+    const inv = v.inventory || [];
+    if (!inv.length) {
+      lines.push('· （库存暂未公布或为空）');
+    } else {
+      for (const item of inv.slice(0, 30)) {
+        lines.push(`· ${item.item ?? '?'} — ${item.ducats ?? 0} 杜卡币 / ${item.credits ?? 0} 现金`);
+      }
     }
     return lines.join('\n');
   }
@@ -270,6 +283,9 @@ export function formatMenu(prefix: string): string {
     '  突击 / 仲裁 / 裂缝 / 钢铁裂缝 / 虚空风暴',
     '  入侵 / 警报 / 奸商 / 特惠 / 活动 / 新闻',
     '  电波 / 舰队 / 猎杀',
+    '  日历 / 1999 / hex日历 — 1999 Hex 日历',
+    '  深层 / deep / archimedea — 深层/时空研习',
+    '  双衍王境 / duviri / circuit — 情绪与回路',
     '',
     '赏金：赏金 地球|金星|火卫二',
     '周期：平原 / 地球 / 金星 / 火卫二 / 扎里曼',
@@ -278,8 +294,151 @@ export function formatMenu(prefix: string): string {
     '翻译：翻译 <关键词>',
     '',
     '推送：订阅列表 / 订阅 <主题> / 取消订阅 <主题>',
-    '主题：sortie arbitration fissures cetus-night invasions voidtrader darvo archon',
+    '主题：sortie arbitration fissures cetus-night invasions voidtrader darvo archon calendar',
   ].join('\n');
+}
+
+
+const SEASON_ZH: Record<string, string> = {
+  Spring: '春季',
+  Summer: '夏季',
+  Autumn: '秋季',
+  Fall: '秋季',
+  Winter: '冬季',
+  CST_SPRING: '春季',
+  CST_SUMMER: '夏季',
+  CST_AUTUMN: '秋季',
+  CST_FALL: '秋季',
+  CST_WINTER: '冬季',
+};
+
+const EVENT_TYPE_ZH: Record<string, string> = {
+  'To Do': '待办',
+  'Big Prize!': '大奖',
+  Override: '覆盖',
+  CET_CHALLENGE: '待办',
+  CET_REWARD: '大奖',
+  CET_UPGRADE: '覆盖',
+};
+
+const DUVIRI_STATE_ZH: Record<string, string> = {
+  joy: '喜悦',
+  anger: '愤怒',
+  envy: '嫉妒',
+  sorrow: '悲伤',
+  fear: '恐惧',
+};
+
+function formatCalendarDate(iso?: string): string {
+  if (!iso) return '?';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  const m = d.getUTCMonth() + 1;
+  const day = d.getUTCDate();
+  return `1999-${String(m).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+}
+
+export function formatCalendar(cal: Calendar1999 | null | undefined, opts: { nearDays?: number } = {}): string {
+  if (!cal) return '当前无 1999 / Hex 日历信息。';
+  const season = SEASON_ZH[cal.season || ''] || cal.season || '?';
+  const lines = [
+    `【1999 日历 · Hex】`,
+    `季节：${season} · 循环年份：${cal.yearIteration ?? '?'}`,
+    `本周窗口剩余：${formatEta(undefined, cal.expiry)}`,
+  ];
+
+  const days = [...(cal.days || [])].filter((d) => (d.events || []).length > 0);
+  // Prefer near-term: sort by date ascending and take nearDays (default 8)
+  days.sort((a, b) => new Date(a.date || 0).getTime() - new Date(b.date || 0).getTime());
+  const limit = opts.nearDays ?? 8;
+  const shown = days.slice(0, limit);
+
+  if (!shown.length) {
+    lines.push('（近期无日程条目）');
+    return lines.join('\n');
+  }
+
+  for (const day of shown) {
+    lines.push(`· ${formatCalendarDate(day.date)}`);
+    for (const ev of day.events || []) {
+      const kind = EVENT_TYPE_ZH[ev.type || ''] || ev.type || '事件';
+      if (ev.challenge) {
+        lines.push(`  [${kind}] ${ev.challenge.title ?? '?'}`);
+        if (ev.challenge.description) lines.push(`    ${ev.challenge.description}`);
+      } else if (ev.reward) {
+        lines.push(`  [${kind}] ${ev.reward}`);
+      } else if (ev.upgrade) {
+        lines.push(`  [${kind}] ${ev.upgrade.title ?? '?'}`);
+        if (ev.upgrade.description) lines.push(`    ${ev.upgrade.description}`);
+      } else {
+        lines.push(`  [${kind}]`);
+      }
+    }
+  }
+  if (days.length > shown.length) {
+    lines.push(`…另有 ${days.length - shown.length} 天有日程`);
+  }
+  return lines.join('\n');
+}
+
+function formatOneArchimedea(a: Archimedea, title: string): string {
+  const lines = [
+    `【${title}】`,
+    `剩余：${formatEta(undefined, a.expiry)}`,
+  ];
+  (a.missions || []).forEach((m, i) => {
+    lines.push(`${i + 1}. ${zh(m.missionType) || m.missionType || '?'} · ${zh(m.faction) || m.faction || '?'}`);
+    if (m.deviation?.name) {
+      lines.push(`   偏差：${m.deviation.name}${m.deviation.description ? ` — ${m.deviation.description}` : ''}`);
+    }
+    for (const r of m.risks || []) {
+      const hard = r.isHard ? ' [钢]' : '';
+      lines.push(`   风险${hard}：${r.name ?? r.key ?? '?'}${r.description ? ` — ${r.description}` : ''}`);
+    }
+  });
+  if (a.personalModifiers?.length) {
+    lines.push('个人修正：');
+    for (const pm of a.personalModifiers) {
+      lines.push(`· ${pm.name ?? pm.key ?? '?'}${pm.description ? ` — ${pm.description}` : ''}`);
+    }
+  }
+  return lines.join('\n');
+}
+
+export function formatArchimedeas(list: Archimedea[] | null | undefined): string {
+  if (!list?.length) return '当前无深层研习 / 时空研习（Archimedea）信息。';
+  const deep = list.find(isDeepArchimedea);
+  const temporal = list.find(isTemporalArchimedea);
+  const parts: string[] = [];
+  if (deep) parts.push(formatOneArchimedea(deep, '深层研习 Deep Archimedea'));
+  if (temporal) parts.push(formatOneArchimedea(temporal, '时空研习 Temporal Archimedea'));
+  // Fallback: show unnamed entries
+  for (const a of list) {
+    if (a === deep || a === temporal) continue;
+    parts.push(formatOneArchimedea(a, `研习 ${a.typeKey || a.type || a.id || '?'}`));
+  }
+  return parts.join('\n\n') || '当前无研习信息。';
+}
+
+export function formatDuviri(d: DuviriCycle | null | undefined): string {
+  if (!d) return '当前无双衍王境周期信息。';
+  const emotion = DUVIRI_STATE_ZH[d.state || ''] || d.state || '?';
+  const lines = [
+    '【双衍王境 / 回路】',
+    `情绪：${emotion}`,
+    `剩余：${formatEta(undefined, d.expiry)}`,
+  ];
+  for (const g of d.choices || []) {
+    const cat =
+      g.categoryKey === 'EXC_HARD' || (g.category || '').toLowerCase() === 'hard'
+        ? '钢铁回路'
+        : g.categoryKey === 'EXC_NORMAL' || (g.category || '').toLowerCase() === 'normal'
+          ? '普通回路'
+          : g.category || g.categoryKey || '选项';
+    const picks = (g.choices || []).map((c) => zh(c) || c).join('、') || '—';
+    lines.push(`· ${cat}：${picks}`);
+  }
+  return lines.join('\n');
 }
 
 /** Push message builders */

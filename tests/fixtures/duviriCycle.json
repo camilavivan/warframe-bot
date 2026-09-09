@@ -1,0 +1,28 @@
+{
+  "id": "duviriCyclejoy1788969600000",
+  "activation": "2026-09-09T14:00:00.000Z",
+  "expiry": "2026-09-09T16:00:00.000Z",
+  "state": "joy",
+  "choices": [
+    {
+      "category": "normal",
+      "categoryKey": "EXC_NORMAL",
+      "choices": [
+        "Garuda",
+        "Baruuk",
+        "Hildryn"
+      ]
+    },
+    {
+      "category": "hard",
+      "categoryKey": "EXC_HARD",
+      "choices": [
+        "Boar",
+        "Gammacor",
+        "Anku",
+        "Gorgon",
+        "Angstrum"
+      ]
+    }
+  ]
+}

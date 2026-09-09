@@ -1,17 +1,20 @@
 import {
   fetchArbitration,
   fetchArchonHunt,
+  fetchCalendar,
   fetchCetusCycle,
   fetchDailyDeals,
   fetchFissures,
   fetchInvasions,
   fetchSortie,
   fetchVoidTrader,
+  isVoidTraderActive,
 } from '../core/warframestat.js';
 import {
   filterFissures,
   formatArbitration,
   formatArchonHunt,
+  formatCalendar,
   formatCycle,
   formatDailyDeals,
   formatFissures,
@@ -121,7 +124,7 @@ export async function pollOnce(send: SendFn): Promise<void> {
   try {
     const vt = await fetchVoidTrader();
     if (vt) {
-      const key = vt.active
+      const key = isVoidTraderActive(vt)
         ? `vt-active:${vt.id ?? vt.location}:${vt.inventory?.length ?? 0}`
         : `vt-wait:${vt.activation ?? ''}:${vt.location ?? ''}`;
       await broadcast('voidtrader', key, `📢 奸商动态\n${formatVoidTrader(vt)}`, send);
@@ -149,6 +152,17 @@ export async function pollOnce(send: SendFn): Promise<void> {
     }
   } catch (err) {
     log.warn({ err }, 'archon poll failed');
+  }
+
+  // 1999 Hex calendar — season change or weekly window refresh
+  try {
+    const cal = await fetchCalendar();
+    if (cal) {
+      const key = `calendar:${cal.season ?? ''}:${cal.yearIteration ?? ''}:${cal.activation ?? ''}:${cal.expiry ?? ''}`;
+      await broadcast('calendar', key, `📢 1999 日历更新\n${formatCalendar(cal)}`, send);
+    }
+  } catch (err) {
+    log.warn({ err }, 'calendar poll failed');
   }
 
   try {

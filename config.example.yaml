@@ -20,6 +20,13 @@ push:
   intervalMs: 60000       # 轮询间隔 60s
   sqlitePath: "./data/bot.db"
 
+# 健康检查 HTTP（Docker HEALTHCHECK 默认打 :6700/health）
+# - OneBot 启用且端口相同：复用 OneBot 的 /health
+# - OneBot 关闭或端口不同：单独启动轻量 health 服务
+health:
+  host: "0.0.0.0"
+  port: 6700
+
 # OneBot v11（NapCat / go-cqhttp / Lagrange）
 onebot:
   enabled: true
@@ -28,11 +35,13 @@ onebot:
   port: 6700
   accessToken: ""         # 可选，与反向 HTTP 上报的 token 一致
   # 发送消息的 OneBot HTTP API
+  # Docker → 宿主机 OneBot：http://host.docker.internal:5700
+  # Docker → 同 compose 网络：http://napcat:5700
   apiBase: "http://127.0.0.1:5700"
   apiAccessToken: ""      # 可选，API 鉴权 token
 
 # KOOK 官方 Bot
 kook:
   enabled: false
-  token: ""               # Bot Token（来自开发者后台）
+  token: ""               # Bot Token（来自开发者后台）；也可用环境变量 KOOK_TOKEN
   # compress: true        # 网关是否压缩（默认 true）

@@ -21,6 +21,13 @@ const ConfigSchema = z.object({
       sqlitePath: z.string().default('./data/bot.db'),
     })
     .default({}),
+  /** Always-on health HTTP. Reuses OneBot port when onebot.enabled && ports match. */
+  health: z
+    .object({
+      host: z.string().default('0.0.0.0'),
+      port: z.number().default(6700),
+    })
+    .default({}),
   onebot: z
     .object({
       enabled: z.boolean().default(true),
@@ -69,6 +76,7 @@ export function loadConfig(path?: string): AppConfig {
   if (process.env.ONEBOT_API_ACCESS_TOKEN) cfg.onebot.apiAccessToken = process.env.ONEBOT_API_ACCESS_TOKEN;
   if (process.env.KOOK_TOKEN) cfg.kook.token = process.env.KOOK_TOKEN;
   if (process.env.LOG_LEVEL) cfg.logLevel = process.env.LOG_LEVEL as AppConfig['logLevel'];
+  if (process.env.HEALTH_PORT) cfg.health.port = Number(process.env.HEALTH_PORT) || cfg.health.port;
 
   cached = cfg;
   return cfg;

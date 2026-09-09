@@ -17,6 +17,7 @@ export const PUSH_TOPICS = [
   'voidtrader',
   'darvo',
   'archon',
+  'calendar',
 ] as const;
 
 export type PushTopic = (typeof PUSH_TOPICS)[number];

@@ -1,3 +1,6 @@
+# 完整示例：warframe-bot + 注释掉的 NapCat 同网部署
+# 用法：cp docker-compose.example.yaml docker-compose.yml 后按需编辑
+
 services:
   warframe-bot:
     build: .
@@ -13,11 +16,9 @@ services:
       - path: .env
         required: false
     environment:
-      - LOG_LEVEL=info
-      # - KOOK_TOKEN=
-      # - ONEBOT_ACCESS_TOKEN=
-      # - ONEBOT_API_ACCESS_TOKEN=
-    # 访问宿主机上的 OneBot HTTP API（config 中 apiBase: http://host.docker.internal:5700）
+      LOG_LEVEL: info
+      # KOOK_TOKEN: ${KOOK_TOKEN:-}
+      # ONEBOT_ACCESS_TOKEN: ${ONEBOT_ACCESS_TOKEN:-}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     healthcheck:
@@ -26,18 +27,15 @@ services:
       timeout: 5s
       retries: 3
       start_period: 15s
-    # deploy:
-    #   resources:
-    #     limits:
-    #       cpus: "0.50"
-    #       memory: 256M
+    # 若 OneBot 在同 compose 网络，取消下面 depends_on，并把 config 中
+    # onebot.apiBase 设为 http://napcat:5700
+    # depends_on:
+    #   - napcat
 
-  # --- 可选：同 compose 网络内的 NapCat / OneBot ---
   # napcat:
   #   image: mlikiowa/napcat-docker:latest
   #   container_name: napcat
   #   restart: unless-stopped
   #   ports:
-  #     - "5700:5700"   # OneBot HTTP API
-  #   # 将上报 URL 设为 http://warframe-bot:6700/
-  #   # 同时把 warframe-bot 的 onebot.apiBase 改为 http://napcat:5700
+  #     - "5700:5700"
+  #   # 反向 HTTP 上报 → http://warframe-bot:6700/
