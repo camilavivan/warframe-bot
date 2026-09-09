@@ -1,4 +1,4 @@
-import type { CommandContext, CommandHandler } from './types.js';
+import type { ChatType, CommandContext, CommandHandler } from './types.js';
 import { loadConfig } from '../config.js';
 
 const handlers: CommandHandler[] = [];
@@ -13,14 +13,17 @@ export function listCommands(): CommandHandler[] {
 
 /**
  * Parse incoming message against configured prefixes.
- * Returns matched command name + args, or null.
+ * In private chat, prefix is optional (bare command names allowed).
+ * In group chat, a configured prefix is required for safety.
  */
-export function matchCommand(text: string): { name: string; args: string } | null {
+export function matchCommand(
+  text: string,
+  opts: { chatType?: ChatType } = {},
+): { name: string; args: string } | null {
   const cfg = loadConfig();
   const trimmed = text.trim();
   let rest = trimmed;
 
-  // Prefer longer prefixes first
   const prefixes = [...cfg.prefix].sort((a, b) => b.length - a.length);
   let matched = false;
   for (const p of prefixes) {
@@ -30,11 +33,14 @@ export function matchCommand(text: string): { name: string; args: string } | nul
       break;
     }
   }
-  // Also allow bare Chinese keywords without prefix when message is short command-like
-  // but require prefix for safety in groups — only skip prefix if starts with known cmd
+
   if (!matched) {
-    // allow `/cmd` style already covered; bare menu keywords without prefix: no
-    return null;
+    // Private / DM: allow bare commands without prefix
+    if (opts.chatType === 'private') {
+      rest = trimmed;
+    } else {
+      return null;
+    }
   }
 
   if (!rest) return { name: '菜单', args: '' };
@@ -47,12 +53,16 @@ export function matchCommand(text: string): { name: string; args: string } | nul
 
 export async function dispatch(ctx: {
   platform: CommandContext['platform'];
+  chatType?: ChatType;
+  chatId?: string;
   groupId: string;
   userId: string;
   text: string;
   reply: CommandContext['reply'];
 }): Promise<boolean> {
-  const matched = matchCommand(ctx.text);
+  const chatType: ChatType = ctx.chatType ?? 'group';
+  const chatId = ctx.chatId ?? ctx.groupId;
+  const matched = matchCommand(ctx.text, { chatType });
   if (!matched) return false;
 
   const nameLower = matched.name.toLowerCase();
@@ -67,7 +77,9 @@ export async function dispatch(ctx: {
 
   await handler.handle({
     platform: ctx.platform,
-    groupId: ctx.groupId,
+    chatType,
+    chatId,
+    groupId: chatId,
     userId: ctx.userId,
     raw: ctx.text,
     args: matched.args,

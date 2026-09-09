@@ -8,8 +8,9 @@
     "build": "tsc",
     "start": "node dist/index.js",
     "dry-run": "tsx src/core/dry-run.ts",
-    "test": "tsx --test tests/formatters.test.ts tests/dedupe.test.ts",
-    "dev": "tsx src/index.ts"
+    "test": "tsx --test tests/formatters.test.ts tests/dedupe.test.ts tests/locale.test.ts",
+    "dev": "tsx src/index.ts",
+    "fetch-lexicon": "node scripts/fetch-zh-lexicon.mjs"
   },
   "engines": {
     "node": ">=20"

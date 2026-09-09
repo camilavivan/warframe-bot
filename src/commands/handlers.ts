@@ -42,6 +42,7 @@ import {
   formatWm,
 } from '../core/formatters.js';
 import { isPushTopic, listSubscriptions, PUSH_TOPICS, subscribe, unsubscribe, type Platform } from '../push/db.js';
+import { lookupBidirectional } from '../core/locale-zh.js';
 
 function safePlatform(p: string): Platform {
   return p === 'kook' ? 'kook' : 'onebot';
@@ -263,18 +264,29 @@ export function registerAllCommands(): void {
   registerCommand({
     name: '翻译',
     aliases: ['translate', 'tr'],
-    description: '物品名搜索/翻译',
+    description: '物品名/术语中英互译与搜索',
     async handle(ctx) {
       if (!ctx.args.trim()) {
         await ctx.reply('用法：翻译 <关键词>');
         return;
       }
-      const results = await translateKeyword(ctx.args.trim());
-      if (!results.length) {
-        await ctx.reply(`未找到与「${ctx.args.trim()}」相关的条目。`);
+      const kw = ctx.args.trim();
+      const local = lookupBidirectional(kw);
+      const results = await translateKeyword(kw);
+      const lines: string[] = [];
+      if (local.length) {
+        lines.push('【词典】');
+        for (const r of local.slice(0, 8)) lines.push(`· ${r}`);
+      }
+      if (results.length) {
+        lines.push('【物品搜索】');
+        for (const r of results) lines.push(`· ${r}`);
+      }
+      if (!lines.length) {
+        await ctx.reply(`未找到与「${kw}」相关的条目。`);
         return;
       }
-      await ctx.reply(`【翻译/搜索】${ctx.args.trim()}\n` + results.map((r) => `· ${r}`).join('\n'));
+      await ctx.reply(`【翻译/搜索】${kw}\n` + lines.join('\n'));
     },
   });
 
@@ -282,18 +294,19 @@ export function registerAllCommands(): void {
   registerCommand({
     name: '订阅列表',
     aliases: ['subs', 'subscriptions'],
-    description: '查看本群订阅',
+    description: '查看本群/私聊订阅',
     async handle(ctx) {
       if (ctx.platform === 'cli') {
         await ctx.reply('CLI 模式无订阅。');
         return;
       }
-      const topics = listSubscriptions(safePlatform(ctx.platform), ctx.groupId);
+      const topics = listSubscriptions(safePlatform(ctx.platform), ctx.chatId);
+      const where = ctx.chatType === 'private' ? '私聊' : '本群';
       if (!topics.length) {
-        await ctx.reply(`本群暂无订阅。\n可用主题：${PUSH_TOPICS.join(', ')}`);
+        await ctx.reply(`${where}暂无订阅。\n可用主题：${PUSH_TOPICS.join(', ')}`);
         return;
       }
-      await ctx.reply(`【订阅列表】\n${topics.map((t) => `· ${t}`).join('\n')}`);
+      await ctx.reply(`【订阅列表·${where}】\n${topics.map((t) => `· ${t}`).join('\n')}`);
     },
   });
 
@@ -311,7 +324,7 @@ export function registerAllCommands(): void {
         await ctx.reply(`用法：订阅 <主题>\n可用：${PUSH_TOPICS.join(', ')}`);
         return;
       }
-      const ok = subscribe(safePlatform(ctx.platform), ctx.groupId, topic);
+      const ok = subscribe(safePlatform(ctx.platform), ctx.chatId, topic, ctx.chatType);
       await ctx.reply(ok ? `已订阅：${topic}` : `已订阅过：${topic}`);
     },
   });
@@ -330,7 +343,7 @@ export function registerAllCommands(): void {
         await ctx.reply(`用法：取消订阅 <主题>\n可用：${PUSH_TOPICS.join(', ')}`);
         return;
       }
-      const ok = unsubscribe(safePlatform(ctx.platform), ctx.groupId, topic);
+      const ok = unsubscribe(safePlatform(ctx.platform), ctx.chatId, topic);
       await ctx.reply(ok ? `已取消：${topic}` : `未订阅：${topic}`);
     },
   });

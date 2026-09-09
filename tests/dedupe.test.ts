@@ -41,11 +41,20 @@ describe('push dedupe & subscriptions', () => {
     assert.deepEqual(listSubscriptions('onebot', '12345'), ['arbitration', 'sortie']);
 
     const subs = getSubscribers('sortie');
-    assert.ok(subs.some((s) => s.platform === 'onebot' && s.groupId === '12345'));
+    assert.ok(subs.some((s) => s.platform === 'onebot' && s.chatId === '12345' && s.chatType === 'group'));
 
     assert.equal(unsubscribe('onebot', '12345', 'sortie'), true);
     assert.equal(unsubscribe('onebot', '12345', 'sortie'), false);
     assert.deepEqual(listSubscriptions('onebot', '12345'), ['arbitration']);
+  });
+
+  it('private chat subscriptions store chat_type', () => {
+    assert.equal(subscribe('onebot', '99901', 'cetus-night', 'private'), true);
+    const subs = getSubscribers('cetus-night');
+    const row = subs.find((s) => s.chatId === '99901');
+    assert.ok(row);
+    assert.equal(row!.chatType, 'private');
+    assert.equal(row!.groupId, '99901');
   });
 
   it('kook platform isolation', () => {

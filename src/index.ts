@@ -26,14 +26,27 @@ async function main(): Promise<void> {
     logger.info('KOOK adapter disabled');
   }
 
-  const send = async (platform: 'onebot' | 'kook', groupId: string, text: string): Promise<void> => {
+  const send = async (
+    platform: 'onebot' | 'kook',
+    chatId: string,
+    text: string,
+    chatType: 'group' | 'private' = 'group',
+  ): Promise<void> => {
     if (platform === 'onebot') {
       if (!onebot) throw new Error('OneBot not running');
-      await onebot.sendGroupMsg(groupId, text);
+      if (chatType === 'private') {
+        await onebot.sendPrivateMsg(chatId, text);
+      } else {
+        await onebot.sendGroupMsg(chatId, text);
+      }
       return;
     }
     if (!kook) throw new Error('KOOK not running');
-    await kook.sendChannelMsg(groupId, text);
+    if (chatType === 'private') {
+      await kook.sendPrivateMsg(chatId, text);
+    } else {
+      await kook.sendChannelMsg(chatId, text);
+    }
   };
 
   if (cfg.push.enabled) {

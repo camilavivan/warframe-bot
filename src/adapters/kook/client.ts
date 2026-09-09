@@ -4,12 +4,14 @@ import { inflateSync } from 'node:zlib';
 import type { AppConfig } from '../../config.js';
 import { logger } from '../../core/logger.js';
 import { dispatch } from '../../commands/registry.js';
+import type { ChatType } from '../../commands/types.js';
 
 const log = logger.child({ module: 'kook' });
 const API = 'https://www.kookapp.cn/api/v3';
 
 export interface KookAdapter {
   sendChannelMsg: (channelId: string, content: string) => Promise<void>;
+  sendPrivateMsg: (userId: string, content: string) => Promise<void>;
   close: () => Promise<void>;
 }
 
@@ -76,6 +78,15 @@ export async function startKook(cfg: AppConfig['kook']): Promise<KookAdapter> {
     log.debug({ channelId }, 'sent channel msg');
   };
 
+  const sendPrivateMsg = async (userId: string, content: string): Promise<void> => {
+    await apiPost(cfg.token, '/direct-message/create', {
+      type: 1,
+      target_id: userId,
+      content,
+    });
+    log.debug({ userId }, 'sent private msg');
+  };
+
   let ws: WebSocket | null = null;
   let heartbeatTimer: NodeJS.Timeout | null = null;
   let sn = 0;
@@ -124,19 +135,29 @@ export async function startKook(cfg: AppConfig['kook']): Promise<KookAdapter> {
 
         // Ignore bot messages
         if (ev.extra?.author?.bot) return;
-        // Text message in group channel
+        // Text message: GROUP channel or PERSON (DM)
         if (ev.type === 9 || ev.type === 1) {
-          const channelId = String(ev.target_id ?? '');
+          const channelType = (ev.channel_type || 'GROUP').toUpperCase();
+          const isPrivate = channelType === 'PERSON';
+          const chatType: ChatType = isPrivate ? 'private' : 'group';
           const userId = String(ev.author_id ?? '');
+          // PERSON: target_id is often the bot or session; reply to author_id
+          const chatId = isPrivate ? userId : String(ev.target_id ?? '');
           const text = (ev.content ?? '').trim();
-          if (!text || !channelId) return;
+          if (!text || !chatId) return;
           dispatch({
             platform: 'kook',
-            groupId: channelId,
+            chatType,
+            chatId,
+            groupId: chatId,
             userId,
             text,
             reply: async (msg) => {
-              await sendChannelMsg(channelId, msg);
+              if (isPrivate) {
+                await sendPrivateMsg(userId, msg);
+              } else {
+                await sendChannelMsg(chatId, msg);
+              }
             },
           }).catch((err) => log.error({ err }, 'dispatch error'));
         }
@@ -166,6 +187,7 @@ export async function startKook(cfg: AppConfig['kook']): Promise<KookAdapter> {
 
   return {
     sendChannelMsg,
+    sendPrivateMsg,
     close: async () => {
       closed = true;
       if (heartbeatTimer) clearInterval(heartbeatTimer);

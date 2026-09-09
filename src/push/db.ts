@@ -2,6 +2,7 @@ import Database from 'better-sqlite3';
 import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { logger } from '../core/logger.js';
+import type { ChatType } from '../commands/types.js';
 
 const log = logger.child({ module: 'db' });
 
@@ -24,7 +25,24 @@ export function isPushTopic(s: string): s is PushTopic {
   return (PUSH_TOPICS as readonly string[]).includes(s);
 }
 
+export interface Subscriber {
+  platform: Platform;
+  /** group_id / channel_id / user_id */
+  chatId: string;
+  chatType: ChatType;
+  /** @deprecated alias of chatId */
+  groupId: string;
+}
+
 let db: Database.Database | null = null;
+
+function ensureChatTypeColumn(database: Database.Database): void {
+  const cols = database.prepare(`PRAGMA table_info(subscriptions)`).all() as Array<{ name: string }>;
+  if (!cols.some((c) => c.name === 'chat_type')) {
+    database.exec(`ALTER TABLE subscriptions ADD COLUMN chat_type TEXT NOT NULL DEFAULT 'group'`);
+    log.info('migrated subscriptions: added chat_type');
+  }
+}
 
 export function getDb(sqlitePath: string): Database.Database {
   if (db) return db;
@@ -36,6 +54,7 @@ export function getDb(sqlitePath: string): Database.Database {
       platform TEXT NOT NULL,
       group_id TEXT NOT NULL,
       topic TEXT NOT NULL,
+      chat_type TEXT NOT NULL DEFAULT 'group',
       created_at INTEGER NOT NULL DEFAULT (strftime('%s','now')),
       PRIMARY KEY (platform, group_id, topic)
     );
@@ -46,6 +65,7 @@ export function getDb(sqlitePath: string): Database.Database {
       PRIMARY KEY (topic, item_key)
     );
   `);
+  ensureChatTypeColumn(db);
   log.info({ sqlitePath }, 'sqlite ready');
   return db;
 }
@@ -57,36 +77,64 @@ export function closeDb(): void {
   }
 }
 
-export function subscribe(platform: Platform, groupId: string, topic: PushTopic): boolean {
+/**
+ * Subscribe chat to topic. Returns true if newly inserted.
+ * Updates chat_type if the row already existed with a different type.
+ */
+export function subscribe(
+  platform: Platform,
+  chatId: string,
+  topic: PushTopic,
+  chatType: ChatType = 'group',
+): boolean {
   if (!db) throw new Error('db not init');
-  const info = db
-    .prepare('INSERT OR IGNORE INTO subscriptions (platform, group_id, topic) VALUES (?, ?, ?)')
-    .run(platform, groupId, topic);
-  return info.changes > 0;
+  const row = db
+    .prepare('SELECT chat_type FROM subscriptions WHERE platform = ? AND group_id = ? AND topic = ?')
+    .get(platform, chatId, topic) as { chat_type?: string } | undefined;
+  if (row) {
+    if (row.chat_type !== chatType) {
+      db.prepare(
+        'UPDATE subscriptions SET chat_type = ? WHERE platform = ? AND group_id = ? AND topic = ?',
+      ).run(chatType, platform, chatId, topic);
+    }
+    return false;
+  }
+  db.prepare(
+    'INSERT INTO subscriptions (platform, group_id, topic, chat_type) VALUES (?, ?, ?, ?)',
+  ).run(platform, chatId, topic, chatType);
+  return true;
 }
 
-export function unsubscribe(platform: Platform, groupId: string, topic: PushTopic): boolean {
+export function unsubscribe(platform: Platform, chatId: string, topic: PushTopic): boolean {
   if (!db) throw new Error('db not init');
   const info = db
     .prepare('DELETE FROM subscriptions WHERE platform = ? AND group_id = ? AND topic = ?')
-    .run(platform, groupId, topic);
+    .run(platform, chatId, topic);
   return info.changes > 0;
 }
 
-export function listSubscriptions(platform: Platform, groupId: string): PushTopic[] {
+export function listSubscriptions(platform: Platform, chatId: string): PushTopic[] {
   if (!db) throw new Error('db not init');
   const rows = db
     .prepare('SELECT topic FROM subscriptions WHERE platform = ? AND group_id = ? ORDER BY topic')
-    .all(platform, groupId) as Array<{ topic: string }>;
+    .all(platform, chatId) as Array<{ topic: string }>;
   return rows.map((r) => r.topic as PushTopic);
 }
 
-export function getSubscribers(topic: PushTopic): Array<{ platform: Platform; groupId: string }> {
+export function getSubscribers(topic: PushTopic): Subscriber[] {
   if (!db) throw new Error('db not init');
   const rows = db
-    .prepare('SELECT platform, group_id FROM subscriptions WHERE topic = ?')
-    .all(topic) as Array<{ platform: string; group_id: string }>;
-  return rows.map((r) => ({ platform: r.platform as Platform, groupId: r.group_id }));
+    .prepare('SELECT platform, group_id, chat_type FROM subscriptions WHERE topic = ?')
+    .all(topic) as Array<{ platform: string; group_id: string; chat_type?: string }>;
+  return rows.map((r) => {
+    const chatType: ChatType = r.chat_type === 'private' ? 'private' : 'group';
+    return {
+      platform: r.platform as Platform,
+      chatId: r.group_id,
+      chatType,
+      groupId: r.group_id,
+    };
+  });
 }
 
 /**

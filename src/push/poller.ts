@@ -25,7 +25,12 @@ import { getSubscribers, purgeOldDedupe, tryMarkPushed, type PushTopic } from '.
 
 const log = logger.child({ module: 'poller' });
 
-export type SendFn = (platform: 'onebot' | 'kook', groupId: string, text: string) => Promise<void>;
+export type SendFn = (
+  platform: 'onebot' | 'kook',
+  chatId: string,
+  text: string,
+  chatType?: 'group' | 'private',
+) => Promise<void>;
 
 async function broadcast(topic: PushTopic, itemKey: string, text: string, send: SendFn): Promise<void> {
   if (!tryMarkPushed(topic, itemKey)) {
@@ -40,9 +45,9 @@ async function broadcast(topic: PushTopic, itemKey: string, text: string, send: 
   log.info({ topic, itemKey, count: subs.length }, 'push');
   for (const s of subs) {
     try {
-      await send(s.platform, s.groupId, text);
+      await send(s.platform, s.chatId, text, s.chatType);
     } catch (err) {
-      log.error({ err, platform: s.platform, groupId: s.groupId }, 'send failed');
+      log.error({ err, platform: s.platform, chatId: s.chatId, chatType: s.chatType }, 'send failed');
     }
   }
 }

@@ -27,9 +27,16 @@
 | `订阅列表` / `订阅 <主题>` / `取消订阅 <主题>` | 推送管理 |
 
 **推送主题**：`sortie` `arbitration` `fissures` `cetus-night` `invasions` `voidtrader` `darvo` `archon`  
-轮询间隔默认 60s，SQLite 去重，按平台 + 群/频道 ID 存储订阅。
+轮询间隔默认 60s，SQLite 去重，按平台 + 群/频道/用户 ID + `chat_type` 存储订阅。
 
 默认指令前缀：`wf ` 与 `/`（可在配置中修改）。
+
+### 私聊（QQ / OneBot）
+
+- **私聊可用查询**：私聊与群聊一样可使用全部查询命令。
+- **私聊也可订阅推送**：`订阅` / `取消订阅` / `订阅列表` 在私聊中生效，推送走 `send_private_msg`。
+- **前缀更宽松**：群聊仍需配置的前缀（如 `wf ` / `/`）；**私聊可省略前缀**直接发 `突击`、`平原` 等。
+- KOOK：支持 `channel_type === PERSON` 的私信查询与订阅（`/direct-message/create`）；频道行为不变。
 
 ## 要求
 
@@ -51,7 +58,8 @@ npm start
 
 ```bash
 npm run dry-run   # 拉取实时 API，打印中文摘要
-npm test          # 单元测试（格式化 / 裂缝过滤 / 去重）
+npm test          # 单元测试（格式化 / 裂缝过滤 / 去重 / 中文词典）
+npm run fetch-lexicon  # 刷新 solNodes 生成词典（可选）
 ```
 
 ## OneBot（QQ）配置
@@ -71,6 +79,7 @@ onebot:
 
 3. 在 OneBot 实现中把「上报 URL」设为 `http://<bot主机>:6700/`（POST）。
 4. 群内发送：`wf 菜单` 或 `/突击`。
+5. 私聊可直接发送：`菜单` / `突击` / `订阅 cetus-night`（无需前缀）。
 
 Docker 访问宿主机 OneBot 时，可将 `apiBase` 设为 `http://host.docker.internal:5700`。
 
@@ -104,11 +113,13 @@ docker compose up -d --build
 src/
   index.ts              # 入口
   config.ts             # YAML + env
-  core/                 # API 客户端、缓存、格式化、dry-run
-  commands/             # 命令注册与处理
-  push/                 # 轮询、去重、订阅（SQLite）
-  adapters/onebot/      # Fastify HTTP 接收 + API 发送
-  adapters/kook/        # WebSocket 网关 + 发消息 API
+  core/                 # API、缓存、格式化、中文词典、dry-run
+  commands/             # 命令注册与处理（群/私聊）
+  push/                 # 轮询、去重、订阅（SQLite，含 chat_type）
+  adapters/onebot/      # Fastify HTTP 接收 + 群/私聊发送
+  adapters/kook/        # WebSocket 网关 + 频道/私信发送
+scripts/
+  fetch-zh-lexicon.mjs  # 拉取 solNodes 生成 locale-zh.generated.ts
 ```
 
 ## 许可

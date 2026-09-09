@@ -3,26 +3,47 @@ import { fetch } from 'undici';
 import type { AppConfig } from '../../config.js';
 import { logger } from '../../core/logger.js';
 import { dispatch } from '../../commands/registry.js';
+import type { ChatType } from '../../commands/types.js';
 
 const log = logger.child({ module: 'onebot' });
 
 export interface OneBotAdapter {
   sendGroupMsg: (groupId: string, message: string) => Promise<void>;
+  sendPrivateMsg: (userId: string, message: string) => Promise<void>;
   close: () => Promise<void>;
+}
+
+function extractText(event: {
+  raw_message?: string;
+  message?: string | Array<{ type: string; data?: { text?: string } }>;
+}): string {
+  let text = event.raw_message ?? '';
+  if (!text && typeof event.message === 'string') text = event.message;
+  if (!text && Array.isArray(event.message)) {
+    text = event.message
+      .filter((s) => s.type === 'text')
+      .map((s) => s.data?.text ?? '')
+      .join('');
+  }
+  return text.trim();
 }
 
 export async function startOneBot(cfg: AppConfig['onebot']): Promise<OneBotAdapter> {
   const app = Fastify({ logger: false });
 
-  const sendGroupMsg = async (groupId: string, message: string): Promise<void> => {
-    const url = `${cfg.apiBase.replace(/\/$/, '')}/send_group_msg`;
+  const apiHeaders = (): Record<string, string> => {
     const headers: Record<string, string> = { 'Content-Type': 'application/json' };
     if (cfg.apiAccessToken) {
       headers.Authorization = `Bearer ${cfg.apiAccessToken}`;
     }
+    return headers;
+  };
+
+  const sendGroupMsg = async (groupId: string, message: string): Promise<void> => {
+    const url = `${cfg.apiBase.replace(/\/$/, '')}/send_group_msg`;
     const res = await fetch(url, {
       method: 'POST',
-      headers,
+      headers: apiHeaders(),
       body: JSON.stringify({ group_id: Number(groupId) || groupId, message }),
     });
     if (!res.ok) {
@@ -32,22 +53,34 @@ export async function startOneBot(cfg: AppConfig['onebot']): Promise<OneBotAdapt
     log.debug({ groupId }, 'sent group msg');
   };
 
+  const sendPrivateMsg = async (userId: string, message: string): Promise<void> => {
+    const url = `${cfg.apiBase.replace(/\/$/, '')}/send_private_msg`;
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: apiHeaders(),
+      body: JSON.stringify({ user_id: Number(userId) || userId, message }),
+    });
+    if (!res.ok) {
+      const body = await res.text();
+      throw new Error(`OneBot send_private_msg HTTP ${res.status}: ${body}`);
+    }
+    log.debug({ userId }, 'sent private msg');
+  };
+
   app.post('/', async (req, reply) => {
     // Optional access token check (query or header)
     if (cfg.accessToken) {
       const auth = (req.headers.authorization || '') as string;
       const token =
         auth.replace(/^Bearer\s+/i, '') ||
-        (req.headers['x-self-id'] as string) || // some impls differ
+        (req.headers['x-self-id'] as string) ||
         (req.query as { access_token?: string }).access_token;
-      // Also check common OneBot reverse HTTP token header
       const headerToken = (req.headers['authorization'] as string)?.replace(/^Bearer\s+/i, '');
       const q = req.query as { access_token?: string };
       const provided = headerToken || q.access_token || '';
       if (provided && provided !== cfg.accessToken) {
         return reply.code(401).send({ error: 'unauthorized' });
       }
-      // If token configured but not provided, still accept (many setups put token only on API side)
       void token;
     }
 
@@ -61,32 +94,29 @@ export async function startOneBot(cfg: AppConfig['onebot']): Promise<OneBotAdapt
       self_id?: number;
     };
 
-    // Quick ACK for meta events
     if (event.post_type === 'meta_event') {
       return reply.send({ status: 'ok' });
     }
 
-    if (event.post_type === 'message' && event.message_type === 'group') {
-      const groupId = String(event.group_id ?? '');
+    if (event.post_type === 'message' && (event.message_type === 'group' || event.message_type === 'private')) {
+      const chatType: ChatType = event.message_type === 'private' ? 'private' : 'group';
       const userId = String(event.user_id ?? '');
-      let text = event.raw_message ?? '';
-      if (!text && typeof event.message === 'string') text = event.message;
-      if (!text && Array.isArray(event.message)) {
-        text = event.message
-          .filter((s) => s.type === 'text')
-          .map((s) => s.data?.text ?? '')
-          .join('');
-      }
-      text = text.trim();
-      if (text) {
-        // Don't await long API calls before ACK — fire and forget with catch
+      const chatId = chatType === 'private' ? userId : String(event.group_id ?? '');
+      const text = extractText(event);
+      if (text && chatId) {
         dispatch({
           platform: 'onebot',
-          groupId,
+          chatType,
+          chatId,
+          groupId: chatId,
           userId,
           text,
           reply: async (msg) => {
-            await sendGroupMsg(groupId, msg);
+            if (chatType === 'private') {
+              await sendPrivateMsg(userId, msg);
+            } else {
+              await sendGroupMsg(chatId, msg);
+            }
           },
         }).catch((err) => log.error({ err }, 'dispatch error'));
       }
@@ -95,7 +125,6 @@ export async function startOneBot(cfg: AppConfig['onebot']): Promise<OneBotAdapt
     return reply.send({ status: 'ok' });
   });
 
-  // Health
   app.get('/health', async () => ({ ok: true }));
 
   await app.listen({ host: cfg.host, port: cfg.port });
@@ -103,6 +132,7 @@ export async function startOneBot(cfg: AppConfig['onebot']): Promise<OneBotAdapt
 
   return {
     sendGroupMsg,
+    sendPrivateMsg,
     close: async () => {
       await app.close();
     },
