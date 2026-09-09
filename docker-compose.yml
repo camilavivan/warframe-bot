@@ -9,9 +9,10 @@ services:
     volumes:
       - ./config.yaml:/app/config.yaml:ro
       - ./data:/app/data
-    env_file:
-      - path: .env
-        required: false
+    # 兼容旧版 docker-compose：不要用 path/required 对象写法。
+    # 若已有 .env，取消下一行注释即可（没有 .env 时请保持注释，否则旧版会报错）：
+    # env_file:
+    #   - .env
     environment:
       - LOG_LEVEL=info
       # - KOOK_TOKEN=
