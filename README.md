@@ -30,7 +30,7 @@
 | `翻译 <关键词>` | 物品搜索 + 本地词典 |
 | `订阅列表` / `订阅 <主题>` / `取消订阅 <主题>` | 推送管理 |
 
-**推送主题**：`sortie` `arbitration` `fissures` `cetus-night` `invasions` `voidtrader` `darvo` `archon` `calendar`  
+**推送主题**：`sortie` `arbitration` `fissures` `cetus-night` `invasions` `voidtrader` `darvo` `archon` `calendar` `events`（特殊事件）  
 轮询间隔默认 60s，SQLite 去重，按平台 + 群/频道/用户 ID + `chat_type` 存储订阅。
 
 默认指令前缀：`wf ` 与 `/`（可在配置中修改）。
@@ -42,6 +42,24 @@
 - **前缀更宽松**：群聊仍需配置的前缀（如 `wf ` / `/`）；**私聊可省略前缀**直接发 `突击`、`平原` 等。
 - KOOK：支持 `channel_type === PERSON` 的私信查询与订阅（`/direct-message/create`）；频道行为不变。
 - QQ 官方：群内需 **@机器人**；C2C 私聊可省略前缀；推送走开放平台主动消息 API（受平台限额约束）。
+
+
+### 图片回复（QQ / OneBot）
+
+部分查询命令会附带 **公开 HTTPS 图片**（Warframe Fandom `Special:FilePath` 等），无需在 VPS 上放置本地图片文件：
+
+| 命令组 | 图片策略 |
+|--------|----------|
+| `突击` / `猎杀` | 阵营图标 / 执政官 Boss 立绘 |
+| `奸商` / `特惠` | Baro / Darvo 主题图；特惠尽量映射物品缩略图 |
+| `裂缝` / `钢铁裂缝` / `虚空风暴` | 虚空裂缝主题图 |
+| `入侵` | 奖励物品缩略图（可解析时）或阵营 / 入侵主题图 |
+| `平原` / `地球` / `金星` / `火卫二` / `扎里曼` | 开放世界地点图 |
+
+- **QQ 官方**：`segment.image(url)` + 文本（`qq-official-bot` Sendable）；图片 URL 须公网可达。
+- **OneBot**：可选 `[CQ:image,url=...]` 前缀；若协议端不支持则忽略图片段即可。
+- **KOOK / CLI**：目前文本-only（忽略 images）。
+- 用户可见文案请用 `「占位」`，**不要**写裸 `<占位>`（官方 SDK 会把 `<>` 当消息元素解析）。
 
 ## 要求
 

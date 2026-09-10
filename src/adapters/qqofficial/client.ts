@@ -1,12 +1,14 @@
 import {
   Bot,
   ReceiverMode,
+  segment,
   type GroupMessageEvent,
   type PrivateMessageEvent,
 } from 'qq-official-bot';
 import type { AppConfig } from '../../config.js';
 import { logger } from '../../core/logger.js';
 import { dispatch } from '../../commands/registry.js';
+import { replyImages, replyText, type ReplyPayload } from '../../commands/types.js';
 
 const log = logger.child({ module: 'qqofficial' });
 
@@ -45,6 +47,17 @@ function createBot(cfg: AppConfig['qqofficial']): AnyBot {
   }) as AnyBot;
 }
 
+
+async function replyQQ(event: { reply: (msg: unknown) => Promise<unknown> }, payload: ReplyPayload): Promise<void> {
+  const text = replyText(payload);
+  const images = replyImages(payload);
+  if (!images.length) {
+    await event.reply(text);
+    return;
+  }
+  await event.reply([...images.map((url) => segment.image(url)), segment.text(text)]);
+}
+
 function wireDispatch(bot: AnyBot): void {
   bot.on('message.group', (event: GroupMessageEvent) => {
     const text = String(event.raw_message ?? '').trim();
@@ -61,7 +74,7 @@ function wireDispatch(bot: AnyBot): void {
       text,
       // Passive reply keeps msg_id — required by QQ Open Platform for group @ replies
       reply: async (msg) => {
-        await event.reply(msg);
+        await replyQQ(event, msg);
       },
     }).catch((err) => log.error({ err }, 'dispatch error'));
   });
@@ -79,7 +92,7 @@ function wireDispatch(bot: AnyBot): void {
       userId,
       text,
       reply: async (msg) => {
-        await event.reply(msg);
+        await replyQQ(event, msg);
       },
     }).catch((err) => log.error({ err }, 'dispatch error'));
   });

@@ -296,7 +296,7 @@ export function formatMenu(prefix: string): string {
     '翻译：翻译 「关键词」',
     '',
     '推送：订阅列表 / 订阅 「主题」 / 取消订阅 「主题」',
-    '主题：sortie arbitration fissures cetus-night invasions voidtrader darvo archon calendar',
+    '主题：sortie arbitration fissures cetus-night invasions voidtrader darvo archon calendar events',
   ].join('\n');
 }
 
@@ -454,4 +454,26 @@ export function formatPushArbitration(a: Arbitration): string {
 
 export function formatPushCetusNight(c: Cycle): string {
   return `📢 希图斯进入夜晚\n${formatCycle(c, '平原（希图斯）')}`;
+}
+
+export function formatPushEvent(e: EventItem): string {
+  const title = e.description ?? e.tooltip ?? '特殊事件';
+  const lines = [`📢 特殊事件`, `· ${title}${e.node ? ` @ ${e.node}` : ''}`];
+  if (e.health != null) lines.push(`  进度/血量：${e.health}%`);
+  if (e.rewards?.length) {
+    const r = e.rewards.map((x) => x.asString).filter(Boolean).join('、');
+    if (r) lines.push(`  奖励：${r}`);
+  }
+  lines.push(`  剩余：${formatEta(undefined, e.expiry)}`);
+  return lines.join('\n');
+}
+
+export function formatPushEvents(list: EventItem[]): string {
+  const active = (list || []).filter((e) => {
+    if (!e.expiry) return true;
+    const t = new Date(e.expiry).getTime();
+    return Number.isNaN(t) || t > Date.now();
+  });
+  if (!active.length) return '📢 特殊事件\n当前无进行中的活动。';
+  return `📢 特殊事件\n${formatEvents(active)}`;
 }

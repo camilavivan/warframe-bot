@@ -11,6 +11,7 @@ import {
   formatDailyDeals,
   formatFissures,
   formatInvasions,
+  formatPushEvent,
   formatPushCetusNight,
   formatPushSortie,
   formatVoidTrader,
@@ -145,6 +146,23 @@ export async function pollFromWorldState(ws: WorldState, send: SendFn): Promise<
     }
   } catch (err) {
     log.warn({ err }, 'archon format/push failed');
+  }
+
+
+  // Special / worldstate events
+  try {
+    const events = ws.events || [];
+    for (const ev of events) {
+      if (!ev?.id && !ev?.description && !ev?.tooltip) continue;
+      if (ev.expiry) {
+        const t = new Date(ev.expiry).getTime();
+        if (!Number.isNaN(t) && t <= Date.now()) continue;
+      }
+      const key = `event:${ev.id ?? ''}:${ev.description ?? ev.tooltip ?? ''}:${ev.expiry ?? ''}`;
+      await broadcast('events', key, formatPushEvent(ev), send);
+    }
+  } catch (err) {
+    log.warn({ err }, 'events format/push failed');
   }
 
   // 1999 Hex calendar — season change or weekly window refresh

@@ -3,7 +3,7 @@ import { fetch } from 'undici';
 import type { AppConfig } from '../../config.js';
 import { logger } from '../../core/logger.js';
 import { dispatch } from '../../commands/registry.js';
-import type { ChatType } from '../../commands/types.js';
+import { toOneBotMessage, type ChatType, type ReplyPayload } from '../../commands/types.js';
 
 const log = logger.child({ module: 'onebot' });
 
@@ -111,11 +111,12 @@ export async function startOneBot(cfg: AppConfig['onebot']): Promise<OneBotAdapt
           groupId: chatId,
           userId,
           text,
-          reply: async (msg) => {
+          reply: async (msg: ReplyPayload) => {
+            const message = toOneBotMessage(msg);
             if (chatType === 'private') {
-              await sendPrivateMsg(userId, msg);
+              await sendPrivateMsg(userId, message);
             } else {
-              await sendGroupMsg(chatId, msg);
+              await sendGroupMsg(chatId, message);
             }
           },
         }).catch((err) => log.error({ err }, 'dispatch error'));

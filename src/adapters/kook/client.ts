@@ -4,7 +4,7 @@ import { inflateSync } from 'node:zlib';
 import type { AppConfig } from '../../config.js';
 import { logger } from '../../core/logger.js';
 import { dispatch } from '../../commands/registry.js';
-import type { ChatType } from '../../commands/types.js';
+import { replyText, type ChatType, type ReplyPayload } from '../../commands/types.js';
 
 const log = logger.child({ module: 'kook' });
 const API = 'https://www.kookapp.cn/api/v3';
@@ -152,11 +152,12 @@ export async function startKook(cfg: AppConfig['kook']): Promise<KookAdapter> {
             groupId: chatId,
             userId,
             text,
-            reply: async (msg) => {
+            reply: async (msg: ReplyPayload) => {
+              const text = replyText(msg);
               if (isPrivate) {
-                await sendPrivateMsg(userId, msg);
+                await sendPrivateMsg(userId, text);
               } else {
-                await sendChannelMsg(chatId, msg);
+                await sendChannelMsg(chatId, text);
               }
             },
           }).catch((err) => log.error({ err }, 'dispatch error'));

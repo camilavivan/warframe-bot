@@ -18,6 +18,7 @@ export const PUSH_TOPICS = [
   'darvo',
   'archon',
   'calendar',
+  'events',
 ] as const;
 
 export type PushTopic = (typeof PUSH_TOPICS)[number];

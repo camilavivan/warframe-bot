@@ -7,3 +7,6 @@ config.yaml
 *.log
 .DS_Store
 ws-caches/
+.env.qqofficial
+.env.*
+!.env.example

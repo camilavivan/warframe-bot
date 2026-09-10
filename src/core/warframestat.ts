@@ -116,8 +116,8 @@ export interface Invasion {
   desc?: string;
   attackingFaction?: string;
   defendingFaction?: string;
-  attackerReward?: { asString?: string };
-  defenderReward?: { asString?: string };
+  attackerReward?: { asString?: string; thumbnail?: string };
+  defenderReward?: { asString?: string; thumbnail?: string };
   completion?: number;
   completed?: boolean;
   eta?: string;
@@ -623,7 +623,7 @@ async function fromWorldState<K extends WorldStateField>(field: K): Promise<NonN
   // Missing optional fields soft-fail (arbitration needs external kuva feed).
   if (!cfg.api.mock && cfg.api.source === 'de') {
     if (field === 'arbitration') {
-      return { node: 'SolNode000', type: 'Unknown' } as NonNullable<WorldState[K]>;
+      return { node: 'SolNode000', type: 'Unknown' } as unknown as NonNullable<WorldState[K]>;
     }
     const emptyArrays = new Set([
       'fissures',
@@ -637,7 +637,7 @@ async function fromWorldState<K extends WorldStateField>(field: K): Promise<NonN
       'voidTraders',
     ]);
     if (emptyArrays.has(field)) {
-      return [] as NonNullable<WorldState[K]>;
+      return [] as unknown as NonNullable<WorldState[K]>;
     }
     throw new Error(`DE worldstate missing field: ${field}`);
   }
