@@ -6,6 +6,7 @@ services:
     restart: unless-stopped
     ports:
       - "6700:6700"
+    # 不要加 user:；入口以 root 启动后 chown ./data 再降权为 node
     volumes:
       - ./config.yaml:/app/config.yaml:ro
       - ./data:/app/data

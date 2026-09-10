@@ -155,6 +155,7 @@ kook:
 
 | 问题 | 处理 |
 |------|------|
+| `unable to open database file` / SQLITE_CANTOPEN | 宿主机执行 `mkdir -p data && chown -R 1000:1000 data` 后重启；新镜像入口会自动 chown |
 | `better-sqlite3` 编译失败 | 安装 `python3 make g++`；或直接用 Docker 镜像 |
 | 容器内无法写 `./data` | 确保宿主机 `./data` 目录对容器用户可写（镜像以 `node` 用户运行） |
 | 健康检查失败 / OneBot 关闭 | 确认 `health.port` 暴露；`curl localhost:6700/health` |

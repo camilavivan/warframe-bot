@@ -28,7 +28,7 @@ WORKDIR /app
 
 # Matching glibc/libstdc++ for better-sqlite3 native binding
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    libstdc++6 curl \
+    libstdc++6 curl util-linux \
   && rm -rf /var/lib/apt/lists/* \
   && mkdir -p /app/data \
   && chown -R node:node /app
@@ -42,7 +42,6 @@ COPY --from=build --chown=node:node /app/package.json ./
 COPY --chown=node:node config.example.yaml ./
 COPY --chown=node:node docker-entrypoint.sh ./
 
-USER node
 VOLUME ["/app/data"]
 EXPOSE 6700
 
