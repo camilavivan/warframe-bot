@@ -20,6 +20,9 @@ services:
       # - ONEBOT_ACCESS_TOKEN=
       # - ONEBOT_API_ACCESS_TOKEN=
       # - HTTPS_PROXY=http://host.docker.internal:7890
+      # 模拟模式（无外网 / CF 403）：也可在 config.yaml 设 api.mock: true
+      # - WARFRAMESTAT_MOCK=1
+      # - WARFRAMESTAT_MOCK_FIXTURE=/app/fixtures/worldstate-pc-zh.json
     # 访问宿主机上的 OneBot HTTP API（config 中 apiBase: http://host.docker.internal:5700）
     extra_hosts:
       - "host.docker.internal:host-gateway"

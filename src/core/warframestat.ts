@@ -1,3 +1,5 @@
+import { readFileSync, statSync, existsSync } from 'node:fs';
+import { resolve, isAbsolute } from 'node:path';
 import { fetch, ProxyAgent, type Dispatcher } from 'undici';
 import { loadConfig } from '../config.js';
 import { globalCache } from './cache.js';
@@ -386,6 +388,63 @@ export function pickWorldStateField<K extends WorldStateField>(
   return v as WorldState[K];
 }
 
+/** Mock fixture cache (mtime + periodic reload). */
+let mockLogged = false;
+let mockCache: { path: string; mtimeMs: number; loadedAt: number; data: WorldState } | null = null;
+
+export function resetMockFixtureCache(): void {
+  mockCache = null;
+  mockLogged = false;
+}
+
+function resolveMockFixturePath(): string {
+  const cfg = loadConfig();
+  const p = cfg.api.mockFixturePath || './fixtures/worldstate-pc-zh.json';
+  return isAbsolute(p) ? p : resolve(process.cwd(), p);
+}
+
+function loadMockWorldState(): WorldState {
+  const cfg = loadConfig();
+  const path = resolveMockFixturePath();
+  if (!mockLogged) {
+    log.info({ fixture: path }, 'warframestat mock mode enabled');
+    mockLogged = true;
+  }
+  if (!existsSync(path)) {
+    throw new Error(`warframestat mock fixture not found: ${path}`);
+  }
+  const st = statSync(path);
+  const now = Date.now();
+  const reloadMs = cfg.api.mockReloadMs ?? 300_000;
+  if (
+    mockCache &&
+    mockCache.path === path &&
+    mockCache.mtimeMs === st.mtimeMs &&
+    now - mockCache.loadedAt < reloadMs
+  ) {
+    return mockCache.data;
+  }
+  const data = JSON.parse(readFileSync(path, 'utf8')) as WorldState;
+  mockCache = { path, mtimeMs: st.mtimeMs, loadedAt: now, data };
+  log.debug({ fixture: path, mtimeMs: st.mtimeMs }, 'loaded mock worldstate fixture');
+  return data;
+}
+
+function fieldFromMockPath(path: string): unknown {
+  const ws = loadMockWorldState();
+  const clean = path.replace(/^\//, '').split('?')[0];
+  if (!clean) return ws;
+  // Map known subpaths → WorldState fields
+  for (const [field, sub] of Object.entries(WORLDSTATE_FIELD_PATHS)) {
+    if (sub === `/${clean}` || sub === path.split('?')[0]) {
+      return ws[field as WorldStateField];
+    }
+  }
+  // Direct property lookup (e.g. "sortie")
+  if (clean in ws) return ws[clean];
+  return undefined;
+}
+
 let proxyAgent: ProxyAgent | null = null;
 let proxyAgentUri: string | null = null;
 
@@ -499,6 +558,13 @@ async function getJsonAbsolute<T>(url: string, ttlMs: number): Promise<T> {
 
 async function getJsonRelative<T>(path: string, ttlMs: number): Promise<T> {
   const cfg = loadConfig();
+  if (cfg.api.mock) {
+    const data = fieldFromMockPath(path);
+    if (data === undefined) {
+      throw new Error(`mock fixture missing path ${path}`);
+    }
+    return data as T;
+  }
   const cacheKey = `wsrel:${cfg.api.platform}:${cfg.api.language}:${path}`;
   const cached = globalCache.get<T>(cacheKey);
   if (cached !== undefined) return cached;
@@ -546,6 +612,10 @@ async function fromWorldState<K extends WorldStateField>(field: K): Promise<NonN
 }
 
 export async function fetchWorldState(): Promise<WorldState> {
+  const cfg = loadConfig();
+  if (cfg.api.mock) {
+    return loadMockWorldState();
+  }
   return getJson<WorldState>('');
 }
 
@@ -635,6 +705,21 @@ export async function fetchDuviriCycle(): Promise<DuviriCycle> {
 
 /** Warframe.market item orders (language-agnostic url_name) */
 export async function searchWmOrders(query: string): Promise<WmItemResult | null> {
+  const cfg = loadConfig();
+  if (cfg.api.mock) {
+    const name = query.trim() || 'mock_item';
+    const urlName = name.toLowerCase().replace(/\s+/g, '_');
+    return {
+      itemName: `[模拟] ${name}`,
+      urlName,
+      sell: [
+        { order_type: 'sell', platinum: 10, quantity: 1, user: { ingame_name: 'MockSeller', status: 'ingame' } },
+      ],
+      buy: [
+        { order_type: 'buy', platinum: 8, quantity: 1, user: { ingame_name: 'MockBuyer', status: 'online' } },
+      ],
+    };
+  }
   const q = query.trim().toLowerCase().replace(/\s+/g, '_');
   // Resolve item via items list or direct
   const itemsUrl = 'https://api.warframe.market/v1/items';
@@ -671,6 +756,9 @@ export async function searchWmOrders(query: string): Promise<WmItemResult | null
 /** Simple zh/en translation via warframestat drops / items search — use drops API for keyword */
 export async function translateKeyword(kw: string): Promise<string[]> {
   const cfg = loadConfig();
+  if (cfg.api.mock) {
+    return [`[模拟模式] 翻译不可用（无外网）: ${kw.trim()}`];
+  }
   const url = `${cfg.api.baseUrl.replace(/\/$/, '')}/items/search/${encodeURIComponent(kw)}?language=${cfg.api.language}`;
   try {
     const data = await getJson<Array<{ name?: string; category?: string; description?: string }>>(url, 300_000, true);

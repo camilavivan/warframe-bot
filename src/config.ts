@@ -19,6 +19,12 @@ const ConfigSchema = z.object({
       fallbackBaseUrls: z.array(z.string()).default([]),
       /** Optional explicit proxy; prefer HTTPS_PROXY / WARFRAMESTAT_PROXY env */
       proxyUrl: z.string().optional(),
+      /** Offline fixture mode — no api.warframestat.us (Cloudflare 403 safe) */
+      mock: z.boolean().default(false),
+      /** Path to worldstate JSON; relative to process cwd unless absolute */
+      mockFixturePath: z.string().default('./fixtures/worldstate-pc-zh.json'),
+      /** How often mock fixture is re-read from disk (mtime always wins sooner) */
+      mockReloadMs: z.number().default(300_000),
     })
     .default({}),
   push: z
@@ -89,6 +95,15 @@ export function loadConfig(path?: string): AppConfig {
   else if (process.env.HTTP_PROXY) cfg.api.proxyUrl = process.env.HTTP_PROXY;
   else if (process.env.https_proxy) cfg.api.proxyUrl = process.env.https_proxy;
   else if (process.env.http_proxy) cfg.api.proxyUrl = process.env.http_proxy;
+
+  const mockEnv = process.env.WARFRAMESTAT_MOCK;
+  if (mockEnv !== undefined) {
+    const v = mockEnv.trim().toLowerCase();
+    cfg.api.mock = v === '1' || v === 'true' || v === 'yes' || v === 'on';
+  }
+  if (process.env.WARFRAMESTAT_MOCK_FIXTURE) {
+    cfg.api.mockFixturePath = process.env.WARFRAMESTAT_MOCK_FIXTURE;
+  }
 
   cached = cfg;
   return cfg;

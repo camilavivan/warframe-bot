@@ -17,6 +17,10 @@ api:
   platform: "pc"          # pc | ps4 | xb1 | swi
   language: "zh"
   cacheTtlMs: 30000       # 世界状态缓存 TTL
+  # 模拟模式：不访问 api.warframestat.us（国内 CF 403 时本地/容器自测）
+  # 也可用环境变量 WARFRAMESTAT_MOCK=1 / WARFRAMESTAT_MOCK_FIXTURE=/path/to.json
+  mock: false
+  mockFixturePath: ./fixtures/worldstate-pc-zh.json  # relative to cwd
 
 # 推送
 push:

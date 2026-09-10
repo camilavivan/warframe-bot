@@ -113,8 +113,56 @@ npm run build
 npm start
 
 npm run dry-run        # 拉取实时 API，打印中文摘要（含日历/研习/王境）
+npm run dry-run:mock   # 使用本地 fixture，不访问外网
 npm test               # 单元测试
 npm run fetch-lexicon  # 刷新 solNodes 生成词典（可选）
+```
+
+## 模拟测试（无外网 / 被 CF 403）
+
+国内机房访问 `api.warframestat.us` 常被 Cloudflare **HTTP 403**。可用本地 JSON fixture 跑通命令、dry-run 与推送轮询（不发起 warframestat 请求）。
+
+```bash
+# 本地
+WARFRAMESTAT_MOCK=1 npm run dry-run
+WARFRAMESTAT_MOCK=1 npm start
+# 或快捷脚本：
+npm run dry-run:mock
+
+# Docker：config.yaml 设 api.mock: true，或 compose environment:
+# - WARFRAMESTAT_MOCK=1
+docker-compose up -d --build
+# 然后对 OneBot 发 wf 突击 / wf 菜单
+```
+
+配置项（`config.yaml` / `config.example.yaml`）：
+
+```yaml
+api:
+  mock: false
+  mockFixturePath: ./fixtures/worldstate-pc-zh.json  # relative to cwd
+```
+
+环境变量：
+
+| 变量 | 说明 |
+|------|------|
+| `WARFRAMESTAT_MOCK=1` / `true` | 开启模拟模式 |
+| `WARFRAMESTAT_MOCK_FIXTURE=/path/to.json` | 覆盖 fixture 路径 |
+
+镜像已内置 `fixtures/`；也可挂载覆盖：`- ./fixtures:/app/fixtures:ro`。
+
+日志会出现一次：`warframestat mock mode enabled`（含 fixture 路径）。  
+`wm` / `翻译` 在模拟模式下返回明确的 stub 数据，不崩溃、不访问 warframe.market / items API。
+
+### 可选：宿主机假 API（不改代码 mock）
+
+```bash
+npm run serve-mock-api   # 默认 :3099，读取 fixtures/worldstate-pc-zh.json
+# config.yaml:
+#   api:
+#     baseUrl: "http://host.docker.internal:3099"
+# Docker 容器内即可用假 API，无需 WARFRAMESTAT_MOCK
 ```
 
 ## OneBot（QQ）配置
@@ -161,7 +209,7 @@ kook:
 | 健康检查失败 / OneBot 关闭 | 确认 `health.port` 暴露；`curl localhost:6700/health` |
 | Docker 访问不到宿主机 OneBot | `apiBase` 用 `http://host.docker.internal:5700`，并保留 `extra_hosts` |
 | 奸商显示异常 | 新版 API 可能省略 `active` 字段，机器人会按 activation/expiry 推算 |
-| 腾讯云等机房 IP 访问 `api.warframestat.us` 被 Cloudflare **HTTP 403** | 设置出网代理环境变量 `HTTPS_PROXY`（或 `WARFRAMESTAT_PROXY` / config `api.proxyUrl`）；或自建 [WFCD/warframe-status](https://github.com/WFCD/warframe-status) 把 `api.baseUrl` 指过去，必要时用 `api.fallbackBaseUrls`。新版本每轮推送只请求一次完整 worldstate（`/pc?language=zh`），降低请求频次 |
+| 腾讯云等机房 IP 访问 `api.warframestat.us` 被 Cloudflare **HTTP 403** | **短期自测**：`WARFRAMESTAT_MOCK=1` 或 `api.mock: true`（见上文「模拟测试」）。**长期**：设置出网代理 `HTTPS_PROXY` / `WARFRAMESTAT_PROXY` / `api.proxyUrl`；或自建 [WFCD/warframe-status](https://github.com/WFCD/warframe-status) 把 `api.baseUrl` 指过去，必要时用 `api.fallbackBaseUrls`；也可用 `npm run serve-mock-api` 把 `baseUrl` 指到宿主机 `:3099`。新版本每轮推送只请求一次完整 worldstate（`/pc?language=zh`），降低请求频次 |
 
 ## 项目结构
 
@@ -177,6 +225,9 @@ src/
   adapters/kook/        # WebSocket 网关 + 频道/私信发送
 scripts/
   fetch-zh-lexicon.mjs  # 拉取 solNodes 生成 locale-zh.generated.ts
+  serve-mock-api.mjs    # 假 warframestat HTTP（:3099）供集成测试
+fixtures/
+  worldstate-pc-zh.json # 离线模拟 worldstate（api.mock / WARFRAMESTAT_MOCK）
 docker-entrypoint.sh    # 缺省 config 警告 / 复制示例
 ```
 

@@ -40,6 +40,7 @@ COPY --from=build --chown=node:node /app/node_modules ./node_modules
 COPY --from=build --chown=node:node /app/dist ./dist
 COPY --from=build --chown=node:node /app/package.json ./
 COPY --chown=node:node config.example.yaml ./
+COPY --chown=node:node fixtures ./fixtures
 COPY --chown=node:node docker-entrypoint.sh ./
 
 VOLUME ["/app/data"]
