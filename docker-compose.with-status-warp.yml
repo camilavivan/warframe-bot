@@ -1,33 +1,11 @@
-# 中国 VPS：warframe-status 经 Cloudflare WARP 出网（内容服地理封锁时）
-#
-# 问题：status 使用 network_mode: service:warp 后与 bot 不在同一 Docker DNS 命名空间，
-# 无法用 http://warframe-status:3001 解析。本文件做法：
-#   - warp 发布 3001:3001（status 共享 warp 网络栈）
-#   - bot 通过 host.docker.internal:3001 访问宿主机映射端口
-#
-# config.yaml 必须设：
-#   api:
-#     baseUrl: "http://host.docker.internal:3001"
-#     mock: false
-#
-# 用法：
-#   mkdir -p ws-caches data
-#   docker compose -f docker-compose.with-status-warp.yml up -d --build
-#   docker compose -f docker-compose.with-status-warp.yml logs -f warp warframe-status warframe-bot
-#   curl -sS 'http://127.0.0.1:3001/heartbeat'
-#   curl -sS 'http://127.0.0.1:3001/pc?language=zh' | head
-#
-# 首次启动 WARP 注册约 30s+。可选 WARP+：环境变量 WARP_LICENSE_KEY。
-# 宿主机必须有 TUN：ls -l /dev/net/tun
-# 若仍失败（云厂商禁 TUN）：不要用本文件，改用普通 compose + 给 warframe-status 配 HTTPS_PROXY。
-# 参考：https://github.com/WFCD/warframe-status/blob/main/docker-compose.warp.example.yml
+# WARP 方案（腾讯云上常失败，优先用普通 compose 或 proxy）
+# config.yaml: api.baseUrl http://host.docker.internal:3001 , mock: false
 
 services:
   warp:
     image: caomingjun/warp@sha256:905b91c3fe197a625611064ef0664f27e9ecdd0a30a91c4ae7046e06a2bf2643
     container_name: warframe-warp
     restart: unless-stopped
-    # 缺 TUN 时 warp-svc 起不来 → "Unable to connect to the CloudflareWARP daemon"
     privileged: true
     devices:
       - /dev/net/tun:/dev/net/tun
@@ -43,13 +21,11 @@ services:
       - net.ipv4.conf.all.src_valid_mark=1
     environment:
       - WARP_SLEEP=2
-      # 腾讯云等常见：不设此项时宿主机/bot 经 host.docker.internal 访问 3001 会 ECONNREFUSED
       - BETA_FIX_HOST_CONNECTIVITY=1
-      # - WARP_LICENSE_KEY=
     volumes:
       - warp-data:/var/lib/cloudflare-warp
     ports:
-      - "3001:3001" # status 与 warp 共享网络；对外暴露 API
+      - "3001:3001"
 
   warframe-status:
     image: ghcr.io/wfcd/warframe-status:latest
@@ -67,19 +43,6 @@ services:
       - BUILD=build
     volumes:
       - ./ws-caches:/app/caches
-    # network_mode: service:warp 时 healthcheck 在同一网络命名空间内探活
-    healthcheck:
-      test:
-        [
-          "CMD",
-          "node",
-          "-e",
-          "fetch('http://127.0.0.1:3001/heartbeat').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
-        ]
-      interval: 30s
-      timeout: 10s
-      retries: 8
-      start_period: 120s
 
   warframe-bot:
     build: .
@@ -93,12 +56,8 @@ services:
     volumes:
       - ./config.yaml:/app/config.yaml:ro
       - ./data:/app/data
-    # env_file:
-    #   - .env
     environment:
       - LOG_LEVEL=info
-      # - WARFRAMESTAT_MOCK=1
-    # 经宿主机映射访问 WARP 侧车上的 status（勿用 http://warframe-status:3001）
     extra_hosts:
       - "host.docker.internal:host-gateway"
     healthcheck:
