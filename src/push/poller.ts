@@ -17,7 +17,13 @@ import {
   formatVoidTrader,
 } from '../core/formatters.js';
 import { logger } from '../core/logger.js';
-import { getSubscribers, purgeOldDedupe, tryMarkPushed, type PushTopic } from './db.js';
+import {
+  getSubscribers,
+  purgeOldDedupe,
+  tryMarkPushed,
+  WORLDSTATE_CHILD_TOPICS,
+  type PushTopic,
+} from './db.js';
 
 const log = logger.child({ module: 'poller' });
 
@@ -28,18 +34,46 @@ export type SendFn = (
   chatType?: 'group' | 'private',
 ) => Promise<void>;
 
+const WORLDSTATE_FANOUT = new Set<string>(WORLDSTATE_CHILD_TOPICS);
+
+/**
+ * Push to topic subscribers; when topic is a worldstate child, also fan out to
+ * umbrella `worldstate` subscribers. Dedupe is per topic+itemKey. Chats with no
+ * matching subscription never receive a push. A chat subscribed to both the
+ * child topic and `worldstate` gets a single delivery (recipient merge).
+ */
 async function broadcast(topic: PushTopic, itemKey: string, text: string, send: SendFn): Promise<void> {
-  if (!tryMarkPushed(topic, itemKey)) {
+  const deliverTopic = tryMarkPushed(topic, itemKey);
+  const deliverUmbrella =
+    WORLDSTATE_FANOUT.has(topic) && tryMarkPushed('worldstate', itemKey);
+
+  if (!deliverTopic && !deliverUmbrella) {
     log.debug({ topic, itemKey }, 'dedupe skip');
     return;
   }
-  const subs = getSubscribers(topic);
-  if (!subs.length) {
-    log.debug({ topic }, 'no subscribers');
+
+  const recipients = new Map<string, ReturnType<typeof getSubscribers>[number]>();
+  if (deliverTopic) {
+    for (const s of getSubscribers(topic)) {
+      recipients.set(`${s.platform}:${s.chatId}`, s);
+    }
+  }
+  if (deliverUmbrella) {
+    for (const s of getSubscribers('worldstate')) {
+      recipients.set(`${s.platform}:${s.chatId}`, s);
+    }
+  }
+
+  if (!recipients.size) {
+    log.debug({ topic, deliverTopic, deliverUmbrella }, 'no subscribers');
     return;
   }
-  log.info({ topic, itemKey, count: subs.length }, 'push');
-  for (const s of subs) {
+
+  log.info(
+    { topic, itemKey, count: recipients.size, deliverTopic, deliverUmbrella },
+    'push',
+  );
+  for (const s of recipients.values()) {
     try {
       await send(s.platform, s.chatId, text, s.chatType);
     } catch (err) {

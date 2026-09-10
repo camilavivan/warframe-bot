@@ -184,7 +184,7 @@ export async function fetchDeWorldState(): Promise<WorldState> {
   const cfg = loadConfig();
   const url = (cfg.api.deWorldStateUrl || DEFAULT_DE_URL).trim() || DEFAULT_DE_URL;
   const locale = cfg.api.language || 'zh';
-  const ttl = cfg.api.cacheTtlMs ?? 30_000;
+  const ttl = cfg.api.cacheTtlMs ?? 60_000;
   const cacheKey = `de-ws:${url}:${locale}`;
 
   const cached = globalCache.get<WorldState>(cacheKey);

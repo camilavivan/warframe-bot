@@ -93,9 +93,11 @@ describe('ReplyPayload helpers', () => {
 });
 
 describe('events push', () => {
-  it('PUSH_TOPICS includes events', () => {
+  it('PUSH_TOPICS includes events and worldstate', () => {
     assert.ok(isPushTopic('events'));
+    assert.ok(isPushTopic('worldstate'));
     assert.ok(PUSH_TOPICS.includes('events'));
+    assert.ok(PUSH_TOPICS.includes('worldstate'));
   });
 
   it('formatPushEvent Chinese summary', () => {

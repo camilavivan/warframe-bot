@@ -296,7 +296,11 @@ export function formatMenu(prefix: string): string {
     '翻译：翻译 「关键词」',
     '',
     '推送：订阅列表 / 订阅 「主题」 / 取消订阅 「主题」',
-    '主题：sortie arbitration fissures cetus-night invasions voidtrader darvo archon calendar events',
+    '推送主题（中英均可订阅）：',
+    '  世界状态 「worldstate」— 全部世界状态变更',
+    '  特殊事件 「events」 / 突击 「sortie」 / 仲裁 「arbitration」',
+    '  裂缝 「fissures」 / 平原夜 「cetus-night」 / 入侵 「invasions」',
+    '  奸商 「voidtrader」 / 特惠 「darvo」 / 猎杀 「archon」 / 日历 「calendar」',
   ].join('\n');
 }
 

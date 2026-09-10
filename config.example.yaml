@@ -26,7 +26,7 @@ api:
   # userAgent: "warframe-bot/1.1 (+https://github.com/camilavivan/warframe-bot)"
   platform: "pc"          # pc | ps4 | xb1 | swi
   language: "zh"
-  cacheTtlMs: 30000       # 世界状态缓存 TTL
+  cacheTtlMs: 60000       # 世界状态缓存 TTL（DE / 命令共用 globalCache）
   # 模拟模式：不访问外网 API；也可用 WARFRAMESTAT_MOCK=1
   # 环境变量 WARFRAMESTAT_SOURCE=de|warframestat|mock
   mock: false

@@ -30,8 +30,29 @@
 | `翻译 <关键词>` | 物品搜索 + 本地词典 |
 | `订阅列表` / `订阅 <主题>` / `取消订阅 <主题>` | 推送管理 |
 
-**推送主题**：`sortie` `arbitration` `fissures` `cetus-night` `invasions` `voidtrader` `darvo` `archon` `calendar` `events`（特殊事件）  
-轮询间隔默认 60s，SQLite 去重，按平台 + 群/频道/用户 ID + `chat_type` 存储订阅。
+**推送主题**（中英别名均可 `订阅` / `取消订阅`）：
+
+| 中文 | English | 说明 |
+|------|---------|------|
+| 世界状态 | `worldstate` | **伞形订阅**：任意下方世界状态变更都会推送 |
+| 特殊事件 | `events` | 非日常限时活动（worldstate `events`，过滤已过期） |
+| 突击 | `sortie` | 每日突击 |
+| 仲裁 | `arbitration` | 仲裁刷新 |
+| 裂缝 | `fissures` | 虚空裂缝更新 |
+| 平原夜 / 希图斯夜 | `cetus-night` | 希图斯进入夜晚 |
+| 入侵 | `invasions` | 新入侵 |
+| 奸商 | `voidtrader` | Baro 动态 |
+| 特惠 | `darvo` | Darvo 特惠 |
+| 猎杀 | `archon` | 执政官猎杀 |
+| 日历 | `calendar` | 1999 Hex 日历 |
+
+仅向**已订阅**对应主题（或 `worldstate`）的会话推送；未订阅不会收到。  
+轮询间隔默认 60s，SQLite 按 `topic` + `itemKey` 去重，按平台 + 群/频道/用户 ID + `chat_type` 存储订阅。
+
+### 查询缓存
+
+- `api.cacheTtlMs` 默认 **60000**（60s）：DE CDN worldstate 与各命令 `fromWorldState` **共用**进程内 `globalCache`，避免重复拉网 / 重复解析。
+- 额外对格式化后的命令回复做短缓存（约 **20s**，键为命令名 + 参数），刷屏同一查询时跳过重复 format；`订阅` / `取消订阅` / `订阅列表` 不缓存。
 
 默认指令前缀：`wf ` 与 `/`（可在配置中修改）。
 

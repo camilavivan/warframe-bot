@@ -1,7 +1,28 @@
-import type { ChatType, CommandContext, CommandHandler } from './types.js';
+import type { ChatType, CommandContext, CommandHandler, ReplyPayload } from './types.js';
 import { loadConfig } from '../config.js';
+import { globalCache } from '../core/cache.js';
 
 const handlers: CommandHandler[] = [];
+
+/** Commands that mutate subscription state — never cache their replies. */
+const NO_REPLY_CACHE = new Set([
+  '订阅',
+  '取消订阅',
+  '订阅列表',
+  'subscribe',
+  'unsubscribe',
+  'unsub',
+  'sub',
+  'subs',
+  'subscriptions',
+]);
+
+/** Short TTL for spam-query reply payloads (skip re-fetch / re-format). */
+const REPLY_CACHE_TTL_MS = 20_000;
+
+function replyCacheKey(name: string, args: string): string {
+  return `cmd-reply:${name.toLowerCase()}:${args.trim().toLowerCase()}`;
+}
 
 export function registerCommand(handler: CommandHandler): void {
   handlers.push(handler);
@@ -75,6 +96,25 @@ export async function dispatch(ctx: {
     return true;
   }
 
+  const cacheable = !NO_REPLY_CACHE.has(handler.name) && !NO_REPLY_CACHE.has(nameLower);
+  const cacheKey = replyCacheKey(handler.name, matched.args);
+  if (cacheable) {
+    const hit = globalCache.get<ReplyPayload>(cacheKey);
+    if (hit !== undefined) {
+      await ctx.reply(hit);
+      return true;
+    }
+  }
+
+  let cachedPayload: ReplyPayload | undefined;
+  const reply: CommandContext['reply'] = async (payload) => {
+    if (cacheable) {
+      cachedPayload = payload;
+      globalCache.set(cacheKey, payload, REPLY_CACHE_TTL_MS);
+    }
+    await ctx.reply(payload);
+  };
+
   await handler.handle({
     platform: ctx.platform,
     chatType,
@@ -83,7 +123,9 @@ export async function dispatch(ctx: {
     userId: ctx.userId,
     raw: ctx.text,
     args: matched.args,
-    reply: ctx.reply,
+    reply,
   });
+
+  void cachedPayload;
   return true;
 }

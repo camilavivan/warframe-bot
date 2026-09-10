@@ -47,7 +47,16 @@ import {
   formatVoidTrader,
   formatWm,
 } from '../core/formatters.js';
-import { isPushTopic, listSubscriptions, PUSH_TOPICS, subscribe, unsubscribe, type Platform } from '../push/db.js';
+import {
+  formatPushTopicsHelp,
+  listSubscriptions,
+  PUSH_TOPIC_LABELS,
+  resolvePushTopic,
+  subscribe,
+  unsubscribe,
+  type Platform,
+  type PushTopic,
+} from '../push/db.js';
 import { lookupBidirectional } from '../core/locale-zh.js';
 import {
   imagesForArchonHunt,
@@ -369,10 +378,14 @@ export function registerAllCommands(): void {
       const topics = listSubscriptions(safePlatform(ctx.platform), ctx.chatId);
       const where = ctx.chatType === 'private' ? '私聊' : '本群';
       if (!topics.length) {
-        await ctx.reply(`${where}暂无订阅。\n可用主题：${PUSH_TOPICS.join(', ')}`);
+        await ctx.reply(`${where}暂无订阅。\n可用主题：\n${formatPushTopicsHelp()}`);
         return;
       }
-      await ctx.reply(`【订阅列表·${where}】\n${topics.map((t) => `· ${t}`).join('\n')}`);
+      const lines = topics.map((t: PushTopic) => {
+        const zh = PUSH_TOPIC_LABELS[t] ?? t;
+        return `· ${zh} 「${t}」`;
+      });
+      await ctx.reply(`【订阅列表·${where}】\n${lines.join('\n')}`);
     },
   });
 
@@ -385,13 +398,14 @@ export function registerAllCommands(): void {
         await ctx.reply('CLI 模式无法订阅。');
         return;
       }
-      const topic = ctx.args.trim().toLowerCase();
-      if (!topic || !isPushTopic(topic)) {
-        await ctx.reply(`用法：订阅 「主题」\n可用：${PUSH_TOPICS.join(', ')}`);
+      const topic = resolvePushTopic(ctx.args);
+      if (!topic) {
+        await ctx.reply(`用法：订阅 「主题」\n可用：\n${formatPushTopicsHelp()}`);
         return;
       }
       const ok = subscribe(safePlatform(ctx.platform), ctx.chatId, topic, ctx.chatType);
-      await ctx.reply(ok ? `已订阅：${topic}` : `已订阅过：${topic}`);
+      const label = `${PUSH_TOPIC_LABELS[topic]} 「${topic}」`;
+      await ctx.reply(ok ? `已订阅：${label}` : `已订阅过：${label}`);
     },
   });
 
@@ -404,13 +418,14 @@ export function registerAllCommands(): void {
         await ctx.reply('CLI 模式无法取消订阅。');
         return;
       }
-      const topic = ctx.args.trim().toLowerCase();
-      if (!topic || !isPushTopic(topic)) {
-        await ctx.reply(`用法：取消订阅 「主题」\n可用：${PUSH_TOPICS.join(', ')}`);
+      const topic = resolvePushTopic(ctx.args);
+      if (!topic) {
+        await ctx.reply(`用法：取消订阅 「主题」\n可用：\n${formatPushTopicsHelp()}`);
         return;
       }
       const ok = unsubscribe(safePlatform(ctx.platform), ctx.chatId, topic);
-      await ctx.reply(ok ? `已取消：${topic}` : `未订阅：${topic}`);
+      const label = `${PUSH_TOPIC_LABELS[topic]} 「${topic}」`;
+      await ctx.reply(ok ? `已取消：${label}` : `未订阅：${label}`);
     },
   });
 }

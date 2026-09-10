@@ -9,6 +9,7 @@ const log = logger.child({ module: 'db' });
 export type Platform = 'onebot' | 'kook' | 'qqofficial';
 
 export const PUSH_TOPICS = [
+  'worldstate',
   'sortie',
   'arbitration',
   'fissures',
@@ -23,8 +24,68 @@ export const PUSH_TOPICS = [
 
 export type PushTopic = (typeof PUSH_TOPICS)[number];
 
+/** Topics that fan out to umbrella `worldstate` subscribers. */
+export const WORLDSTATE_CHILD_TOPICS = [
+  'sortie',
+  'arbitration',
+  'fissures',
+  'cetus-night',
+  'invasions',
+  'voidtrader',
+  'darvo',
+  'archon',
+  'calendar',
+  'events',
+] as const satisfies readonly PushTopic[];
+
 export function isPushTopic(s: string): s is PushTopic {
   return (PUSH_TOPICS as readonly string[]).includes(s);
+}
+
+/** Chinese display labels for push topics. */
+export const PUSH_TOPIC_LABELS: Record<PushTopic, string> = {
+  worldstate: '世界状态',
+  sortie: '突击',
+  arbitration: '仲裁',
+  fissures: '裂缝',
+  'cetus-night': '平原夜',
+  invasions: '入侵',
+  voidtrader: '奸商',
+  darvo: '特惠',
+  archon: '猎杀',
+  calendar: '日历',
+  events: '特殊事件',
+};
+
+/** Chinese (and synonym) aliases → canonical English topic. */
+export const PUSH_TOPIC_ALIASES: Record<string, PushTopic> = {
+  世界状态: 'worldstate',
+  特殊事件: 'events',
+  突击: 'sortie',
+  仲裁: 'arbitration',
+  裂缝: 'fissures',
+  平原夜: 'cetus-night',
+  希图斯夜: 'cetus-night',
+  入侵: 'invasions',
+  奸商: 'voidtrader',
+  特惠: 'darvo',
+  猎杀: 'archon',
+  日历: 'calendar',
+};
+
+/** Resolve English topic or Chinese alias to a PushTopic. */
+export function resolvePushTopic(input: string): PushTopic | null {
+  const raw = input.trim();
+  if (!raw) return null;
+  const lower = raw.toLowerCase();
+  if (isPushTopic(lower)) return lower;
+  const fromAlias = PUSH_TOPIC_ALIASES[raw] ?? PUSH_TOPIC_ALIASES[lower];
+  return fromAlias ?? null;
+}
+
+/** Multi-line topic help for 订阅 / 菜单 (uses 「」 not <>). */
+export function formatPushTopicsHelp(): string {
+  return PUSH_TOPICS.map((t) => `· ${PUSH_TOPIC_LABELS[t]} 「${t}」`).join('\n');
 }
 
 export interface Subscriber {

@@ -22,7 +22,7 @@ const ConfigSchema = z.object({
       baseUrl: z.string().default('https://api.warframestat.us'),
       platform: z.string().default('pc'),
       language: z.string().default('zh'),
-      cacheTtlMs: z.number().default(30_000),
+      cacheTtlMs: z.number().default(60_000),
       userAgent: z.string().default(DEFAULT_UA),
       /** Extra warframe-status bases tried after primary (e.g. self-hosted) */
       fallbackBaseUrls: z.array(z.string()).default([]),
