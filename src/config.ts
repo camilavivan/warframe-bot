@@ -67,6 +67,20 @@ const ConfigSchema = z.object({
       compress: z.boolean().default(true),
     })
     .default({}),
+  /** QQ Open Platform official bot (AppID + Secret, not OneBot / WorkBuddy) */
+  qqofficial: z
+    .object({
+      enabled: z.boolean().default(false),
+      appId: z.string().default(''),
+      secret: z.string().default(''),
+      /** Kept for config compatibility; SDK sandbox flag is deprecated but still accepted */
+      sandbox: z.boolean().default(true),
+      removeAt: z.boolean().default(true),
+      mode: z.enum(['websocket', 'webhook']).default('websocket'),
+      webhookPort: z.number().default(9000),
+      webhookPath: z.string().default('/qqbot/webhook'),
+    })
+    .default({}),
 });
 
 export type AppConfig = z.infer<typeof ConfigSchema>;
@@ -97,6 +111,8 @@ export function loadConfig(path?: string): AppConfig {
   if (process.env.ONEBOT_ACCESS_TOKEN) cfg.onebot.accessToken = process.env.ONEBOT_ACCESS_TOKEN;
   if (process.env.ONEBOT_API_ACCESS_TOKEN) cfg.onebot.apiAccessToken = process.env.ONEBOT_API_ACCESS_TOKEN;
   if (process.env.KOOK_TOKEN) cfg.kook.token = process.env.KOOK_TOKEN;
+  if (process.env.QQ_BOT_APP_ID) cfg.qqofficial.appId = process.env.QQ_BOT_APP_ID;
+  if (process.env.QQ_BOT_SECRET) cfg.qqofficial.secret = process.env.QQ_BOT_SECRET;
   if (process.env.LOG_LEVEL) cfg.logLevel = process.env.LOG_LEVEL as AppConfig['logLevel'];
   if (process.env.HEALTH_PORT) cfg.health.port = Number(process.env.HEALTH_PORT) || cfg.health.port;
   if (process.env.WARFRAMESTAT_PROXY) cfg.api.proxyUrl = process.env.WARFRAMESTAT_PROXY;

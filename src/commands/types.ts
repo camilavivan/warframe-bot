@@ -1,10 +1,10 @@
-export type Platform = 'onebot' | 'kook' | 'cli';
+export type Platform = 'onebot' | 'kook' | 'qqofficial' | 'cli';
 
 export type ChatType = 'group' | 'private';
 
 export interface CommandContext {
   platform: Platform;
-  /** 'group' = QQ群/KOOK频道；'private' = 私聊/DM */
+  /** 'group' = QQ群/官方群/KOOK频道；'private' = 私聊/DM/C2C */
   chatType: ChatType;
   /** group_id / channel_id / user_id（私聊时） */
   chatId: string;

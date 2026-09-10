@@ -51,7 +51,9 @@ import { isPushTopic, listSubscriptions, PUSH_TOPICS, subscribe, unsubscribe, ty
 import { lookupBidirectional } from '../core/locale-zh.js';
 
 function safePlatform(p: string): Platform {
-  return p === 'kook' ? 'kook' : 'onebot';
+  if (p === 'kook') return 'kook';
+  if (p === 'qqofficial') return 'qqofficial';
+  return 'onebot';
 }
 
 export function registerAllCommands(): void {

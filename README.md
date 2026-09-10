@@ -2,8 +2,9 @@
 
 中文 Warframe **信息查询** + **世界状态推送** 机器人，同时支持：
 
-1. **QQ** — OneBot v11（HTTP 上报接收 + HTTP API 发送，兼容 NapCat / go-cqhttp / Lagrange）
-2. **KOOK** — 官方 Bot WebSocket 网关
+1. **QQ OneBot** — OneBot v11（HTTP 上报接收 + HTTP API 发送，兼容 NapCat / go-cqhttp / Lagrange）
+2. **QQ 官方开放平台** — AppID + AppSecret（WebSocket / Webhook，群 @ + C2C 私聊）
+3. **KOOK** — 官方 Bot WebSocket 网关
 
 数据来源：**默认直连 DE CDN** [`api.warframe.com/cdn/worldState.php`](https://api.warframe.com/cdn/worldState.php) + [`warframe-worldstate-parser`](https://www.npmjs.com/package/warframe-worldstate-parser)（`api.source: de`，国内推荐）；亦可 [api.warframestat.us](https://api.warframestat.us) / 自建 [WFCD/warframe-status](https://github.com/WFCD/warframe-status)；市场价走 [Warframe.market](https://warframe.market)。旧 `content.warframe.com/dynamic/worldState.php` 已全局 **404**。
 
@@ -40,6 +41,7 @@
 - **私聊也可订阅推送**：`订阅` / `取消订阅` / `订阅列表` 在私聊中生效，推送走 `send_private_msg`。
 - **前缀更宽松**：群聊仍需配置的前缀（如 `wf ` / `/`）；**私聊可省略前缀**直接发 `突击`、`平原` 等。
 - KOOK：支持 `channel_type === PERSON` 的私信查询与订阅（`/direct-message/create`）；频道行为不变。
+- QQ 官方：群内需 **@机器人**；C2C 私聊可省略前缀；推送走开放平台主动消息 API（受平台限额约束）。
 
 ## 要求
 
@@ -62,12 +64,14 @@ cd warframe-bot
 
 # 1) 配置
 cp config.example.yaml config.yaml
-# 编辑 config.yaml：OneBot / KOOK / 推送等
+# 编辑 config.yaml：OneBot / QQ 官方 / KOOK / 推送等
 
 # 可选敏感项放 .env
 cp .env.example .env
 # KOOK_TOKEN=xxxx
 # ONEBOT_ACCESS_TOKEN=xxxx
+# QQ_BOT_APP_ID=xxxx
+# QQ_BOT_SECRET=xxxx
 
 # 2) 构建并后台启动
 docker compose up -d --build
@@ -313,6 +317,55 @@ kook:
 
 3. 在频道发送：`wf 平原` / `/订阅 cetus-night`。
 
+## QQ 官方机器人
+
+> **与 WorkBuddy 的区别**：[`https://q.qq.com/setup/`](https://q.qq.com/setup/) 引导安装的是 **WorkBuddy 等第三方 Agent 客户端**（把 QQ 当聊天前端跑 Agent）。本仓库适配的是 **[QQ 开放平台官方机器人 API](https://bot.q.qq.com/wiki/)**（AppID + AppSecret，自建后端），二者不是同一条产品线。自建 Warframe 查询/推送请走开放平台，不要把 WorkBuddy 配置当成 OneBot。
+
+### 接入步骤
+
+1. 打开 [QQ 开放平台](https://q.qq.com/) / [机器人文档](https://bot.q.qq.com/wiki/)，注册开发者并 **创建机器人**。
+2. 在管理端拿到 **AppID**、**AppSecret**；开通 **群聊** / **C2C 私聊** 能力，订阅事件意图 `GROUP_AND_C2C_EVENT`（群 @ 消息 + 私聊）。
+3. 把机器人拉进 **沙箱群**（开发阶段务必先沙箱验证）。
+4. 配置 `config.yaml`（或环境变量），Docker 重建后在群内 **@机器人** 发送 `突击` / `wf 突击`：
+
+```yaml
+qqofficial:
+  enabled: true
+  appId: "你的AppID"          # 或 QQ_BOT_APP_ID
+  secret: "你的AppSecret"     # 或 QQ_BOT_SECRET
+  sandbox: true               # 首次建议 true
+  removeAt: true
+  # mode: websocket           # 默认；亦支持 webhook
+  # webhookPort: 9000
+  # webhookPath: /qqbot/webhook
+```
+
+```bash
+# /opt/warframe-bot 示例
+cp config.example.yaml config.yaml   # 若尚未有
+# 编辑 qqofficial 段如上
+# .env 亦可：
+# QQ_BOT_APP_ID=...
+# QQ_BOT_SECRET=...
+docker compose up -d --build
+docker compose logs -f warframe-bot
+# 沙箱群：@机器人 突击
+```
+
+5. 正式上线前将 `sandbox: false`，并确认生产群已添加机器人。
+
+### IP 白名单
+
+开放平台可能要求配置 **服务器公网 IP 白名单**。腾讯云等 VPS 请填写实例的 **公网 IP**（多网卡/NAT 时以实际出网访问 `bots.qq.com` / `api.bot.qq.com` 的地址为准）。IP 变更后需同步更新白名单，否则换 Token / 连网关会失败。
+
+### 指令面板
+
+可在开放平台管理端配置展示用指令（如「突击」「裂缝」「平原」），方便用户点选；**真实逻辑仍由本仓库命令处理**，面板名称建议与代码别名一致。
+
+### 与 OneBot 并存
+
+`onebot` 与 `qqofficial` 可同时启用：前者对接 NapCat 等协议端，后者直连官方开放平台。订阅推送的 `platform` 字段分别为 `onebot` / `qqofficial`，互不覆盖。
+
 ## 故障排除
 
 | 问题 | 处理 |
@@ -322,6 +375,8 @@ kook:
 | 容器内无法写 `./data` | 确保宿主机 `./data` 目录对容器用户可写（镜像以 `node` 用户运行） |
 | 健康检查失败 / OneBot 关闭 | 确认 `health.port` 暴露；`curl localhost:6700/health` |
 | Docker 访问不到宿主机 OneBot | `apiBase` 用 `http://host.docker.internal:5700`，并保留 `extra_hosts` |
+| QQ 官方连不上 / 鉴权失败 | 核对 AppID/Secret、IP 白名单、沙箱开关；群聊须 **@机器人**；先 `sandbox: true` |
+| QQ 官方推送失败 | 主动消息受平台限额/权限约束；优先依赖用户 @ 后的被动回复；检查开放平台消息权限 |
 | 奸商显示异常 | 新版 API 可能省略 `active` 字段，机器人会按 activation/expiry 推算 |
 | 腾讯云等机房 IP 访问 `api.warframestat.us` 被 Cloudflare **HTTP 403** / status 灌空 | **推荐**：`api.source: de` + `mock: false`（直连 DE CDN，无需 status）。旧 content.warframe.com 已 404。仍可用自建 status（`source: warframestat`）或 WARP/代理 compose。**短期自测**：`WARFRAMESTAT_MOCK=1`。亦可 `HTTPS_PROXY` / `api.proxyUrl` |
 | `ghcr.io/wfcd/warframe-status` 拉取失败 | 配镜像加速/代理；或 clone WFCD/warframe-status 后改 compose `build.context`（勿 vendoring 进本仓库） |
@@ -340,6 +395,7 @@ src/
   push/                 # 轮询、去重、订阅（SQLite，含 chat_type）
   adapters/onebot/      # Fastify HTTP 接收 + 群/私聊发送
   adapters/kook/        # WebSocket 网关 + 频道/私信发送
+  adapters/qqofficial/  # QQ 开放平台 AppID/Secret（群@ + C2C）
 scripts/
   fetch-zh-lexicon.mjs  # 拉取 solNodes 生成 locale-zh.generated.ts
   serve-mock-api.mjs    # 假 warframestat HTTP（:3099）供集成测试

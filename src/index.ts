@@ -5,6 +5,7 @@ import { getDb } from './push/db.js';
 import { startPoller } from './push/poller.js';
 import { startOneBot, type OneBotAdapter } from './adapters/onebot/server.js';
 import { startKook, type KookAdapter } from './adapters/kook/client.js';
+import { startQQOfficial, type QQOfficialAdapter } from './adapters/qqofficial/client.js';
 import { startHealthServer, type HealthServer } from './health.js';
 
 async function main(): Promise<void> {
@@ -14,6 +15,7 @@ async function main(): Promise<void> {
 
   let onebot: OneBotAdapter | null = null;
   let kook: KookAdapter | null = null;
+  let qqofficial: QQOfficialAdapter | null = null;
   let health: HealthServer | null = null;
 
   if (cfg.onebot.enabled) {
@@ -31,8 +33,14 @@ async function main(): Promise<void> {
     logger.info('KOOK adapter disabled');
   }
 
+  if (cfg.qqofficial.enabled) {
+    qqofficial = await startQQOfficial(cfg.qqofficial);
+  } else {
+    logger.info('QQ official adapter disabled');
+  }
+
   const send = async (
-    platform: 'onebot' | 'kook',
+    platform: 'onebot' | 'kook' | 'qqofficial',
     chatId: string,
     text: string,
     chatType: 'group' | 'private' = 'group',
@@ -43,6 +51,15 @@ async function main(): Promise<void> {
         await onebot.sendPrivateMsg(chatId, text);
       } else {
         await onebot.sendGroupMsg(chatId, text);
+      }
+      return;
+    }
+    if (platform === 'qqofficial') {
+      if (!qqofficial) throw new Error('QQ official not running');
+      if (chatType === 'private') {
+        await qqofficial.sendPrivateMsg(chatId, text);
+      } else {
+        await qqofficial.sendGroupMsg(chatId, text);
       }
       return;
     }
@@ -63,6 +80,7 @@ async function main(): Promise<void> {
       healthPort: cfg.health.port,
       onebot: cfg.onebot.enabled,
       kook: cfg.kook.enabled,
+      qqofficial: cfg.qqofficial.enabled,
     },
     'warframe-bot started',
   );
@@ -72,6 +90,7 @@ async function main(): Promise<void> {
     await health?.close();
     await onebot?.close();
     await kook?.close();
+    await qqofficial?.close();
     process.exit(0);
   };
   process.on('SIGINT', shutdown);

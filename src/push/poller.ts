@@ -21,7 +21,7 @@ import { getSubscribers, purgeOldDedupe, tryMarkPushed, type PushTopic } from '.
 const log = logger.child({ module: 'poller' });
 
 export type SendFn = (
-  platform: 'onebot' | 'kook',
+  platform: 'onebot' | 'kook' | 'qqofficial',
   chatId: string,
   text: string,
   chatType?: 'group' | 'private',

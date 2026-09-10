@@ -6,7 +6,7 @@ import type { ChatType } from '../commands/types.js';
 
 const log = logger.child({ module: 'db' });
 
-export type Platform = 'onebot' | 'kook';
+export type Platform = 'onebot' | 'kook' | 'qqofficial';
 
 export const PUSH_TOPICS = [
   'sortie',

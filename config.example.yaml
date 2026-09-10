@@ -63,3 +63,17 @@ kook:
   enabled: false
   token: ""               # Bot Token（来自开发者后台）；也可用环境变量 KOOK_TOKEN
   # compress: true        # 网关是否压缩（默认 true）
+
+# QQ 官方开放平台机器人（AppID + AppSecret，非 OneBot / 非 WorkBuddy）
+# 文档：https://bot.q.qq.com/wiki/  ·  SDK：qq-official-bot
+# 注意：https://q.qq.com/setup/ 上的 WorkBuddy 是第三方 Agent 客户端，不是本适配器
+qqofficial:
+  enabled: false
+  appId: ""               # 或环境变量 QQ_BOT_APP_ID
+  secret: ""              # 或环境变量 QQ_BOT_SECRET
+  sandbox: true           # 首次建议 true（沙箱群验证）
+  removeAt: true          # 分发前去掉 @机器人
+  # mode: websocket       # websocket（默认）| webhook
+  # webhookPort: 9000
+  # webhookPath: /qqbot/webhook
+

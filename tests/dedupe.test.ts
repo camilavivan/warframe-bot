@@ -62,4 +62,13 @@ describe('push dedupe & subscriptions', () => {
     assert.deepEqual(listSubscriptions('kook', 'ch1'), ['fissures']);
     assert.deepEqual(listSubscriptions('onebot', 'ch1'), []);
   });
+
+  it('qqofficial platform isolation', () => {
+    subscribe('qqofficial', 'g_openid_1', 'sortie', 'group');
+    subscribe('qqofficial', 'u_openid_1', 'cetus-night', 'private');
+    assert.deepEqual(listSubscriptions('qqofficial', 'g_openid_1'), ['sortie']);
+    assert.deepEqual(listSubscriptions('qqofficial', 'u_openid_1'), ['cetus-night']);
+    assert.deepEqual(listSubscriptions('onebot', 'g_openid_1'), []);
+    assert.deepEqual(listSubscriptions('kook', 'g_openid_1'), []);
+  });
 });
