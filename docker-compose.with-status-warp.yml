@@ -18,6 +18,8 @@
 #   curl -sS 'http://127.0.0.1:3001/pc?language=zh' | head
 #
 # 首次启动 WARP 注册约 30s+。可选 WARP+：环境变量 WARP_LICENSE_KEY。
+# 宿主机必须有 TUN：ls -l /dev/net/tun
+# 若仍失败（云厂商禁 TUN）：不要用本文件，改用普通 compose + 给 warframe-status 配 HTTPS_PROXY。
 # 参考：https://github.com/WFCD/warframe-status/blob/main/docker-compose.warp.example.yml
 
 services:
@@ -25,12 +27,17 @@ services:
     image: caomingjun/warp@sha256:905b91c3fe197a625611064ef0664f27e9ecdd0a30a91c4ae7046e06a2bf2643
     container_name: warframe-warp
     restart: unless-stopped
+    # 缺 TUN 时 warp-svc 起不来 → "Unable to connect to the CloudflareWARP daemon"
+    privileged: true
+    devices:
+      - /dev/net/tun:/dev/net/tun
     device_cgroup_rules:
       - "c 10:200 rwm"
     cap_add:
       - NET_ADMIN
       - MKNOD
       - AUDIT_WRITE
+      - SYS_ADMIN
     sysctls:
       - net.ipv6.conf.all.disable_ipv6=0
       - net.ipv4.conf.all.src_valid_mark=1

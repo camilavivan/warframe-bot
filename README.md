@@ -334,3 +334,18 @@ docker-entrypoint.sh    # 缺省 config 警告 / 复制示例
 ## 许可
 
 MIT
+
+
+## 无 TUN / WARP 失败时用 HTTP 代理
+
+腾讯云等环境常无法跑 Cloudflare WARP 容器（缺 `/dev/net/tun`，日志出现 `Unable to connect to the CloudflareWARP daemon`）。可改用本机已有代理：
+
+```bash
+# 确认宿主机代理可用，例如 clash HTTP 7890
+curl -x http://127.0.0.1:7890 -sS -o /dev/null -w '%{http_code}\n' https://content.warframe.com
+
+# config.yaml → api.baseUrl: "http://warframe-status:3001" , mock: false
+export WARFRAME_STATUS_PROXY=http://host.docker.internal:7890
+docker-compose -f docker-compose.with-status-proxy.yml up -d --build
+curl -sS 'http://127.0.0.1:3001/pc?language=zh' | head -c 200
+```
