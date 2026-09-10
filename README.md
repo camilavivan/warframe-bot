@@ -107,6 +107,9 @@ compose 已配置 `extra_hosts: host.docker.internal:host-gateway`。
 
 ## 自建 warframe-status
 
+若 bot 报 `ECONNREFUSED ...:3001`：先 `curl http://127.0.0.1:3001/heartbeat`；不通则查 `docker logs warframe-status` / `warframe-warp`。普通 compose 请用 `baseUrl: http://warframe-status:3001`，不要用 `host.docker.internal`。WARP 方案需开启 `BETA_FIX_HOST_CONNECTIVITY=1`（已写入 `docker-compose.with-status-warp.yml`）。
+
+
 国内机房访问官方 `https://api.warframestat.us` 常被 **Cloudflare HTTP 403** 拦截。可在同一 Docker Compose 中自建 [WFCD/warframe-status](https://github.com/WFCD/warframe-status)，让机器人走内网 `http://warframe-status:3001`，**不再经过 Cloudflare**。
 
 > **注意**：status 容器仍需出网拉取 Warframe **内容服** worldstate。若机房 IP 被内容服地理封锁（DE geo-block），请改用下方 **WARP 侧车** 方案，而不是只换 baseUrl。

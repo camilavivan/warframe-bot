@@ -36,8 +36,9 @@ services:
       - net.ipv4.conf.all.src_valid_mark=1
     environment:
       - WARP_SLEEP=2
+      # 腾讯云等常见：不设此项时宿主机/bot 经 host.docker.internal 访问 3001 会 ECONNREFUSED
+      - BETA_FIX_HOST_CONNECTIVITY=1
       # - WARP_LICENSE_KEY=
-      # - BETA_FIX_HOST_CONNECTIVITY=1  # 若宿主机访问不到已发布端口再打开
     volumes:
       - warp-data:/var/lib/cloudflare-warp
     ports:
