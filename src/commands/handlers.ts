@@ -71,6 +71,7 @@ import {
   imagesForSortie,
   imagesForVoidTrader,
 } from '../core/images.js';
+import { formatResourceFarm } from '../core/resources.js';
 
 function safePlatform(p: string): Platform {
   if (p === 'kook') return 'kook';
@@ -125,6 +126,15 @@ export function registerAllCommands(): void {
     async handle(ctx) {
       const schedule = await fetchArbitrationSchedule();
       await ctx.reply(formatEfficientArbitrations(filterEfficientArbitrations(schedule)));
+    },
+  });
+
+  registerCommand({
+    name: '资源',
+    aliases: ['哪里刷', 'farm', '刷取', '掉落'],
+    description: '常见资源刷取地点（离线词典）',
+    async handle(ctx) {
+      await ctx.reply(formatResourceFarm(ctx.args || ''));
     },
   });
 
