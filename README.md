@@ -127,6 +127,8 @@ api:
 环境变量：`WARFRAMESTAT_SOURCE=de` · `WARFRAME_DE_WORLDSTATE_URL=...`
 
 > **说明**：旧地址 `content.warframe.com/dynamic/worldState.php` 已全局 404。自建 `ghcr.io/wfcd/warframe-status` 若仍拉旧 URL 会灌空/`WorldState Not Found`；核心推送/查询改用 `source: de` 后可停用 status 容器（或保留不用）。`wm` / `翻译` 仍走 Warframe.market / items（与 worldstate 来源无关）。仲裁依赖外部 kuva 源，DE-only 模式下可能暂缺。
+>
+> **DE 解析**：`warframe-worldstate-parser` 默认会向 `api.warframestat.us/drops/search` 拉赏金掉落补全；国内常被 Cloudflare 返回 HTML，导致 JSON 解析失败并刷屏。bot 在 DE 解析期间会短接该 drops 请求并静默 parser 的 debug（kuva/outpost 缺数据同类），不影响 `api.warframe.com` CDN 拉取。赏金 `rewardPool` 可能为占位文案，核心推送不依赖掉落补全。
 
 ## 自建 warframe-status
 

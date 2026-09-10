@@ -19,6 +19,23 @@ const log = logger.child({ module: 'de-worldstate' });
 
 const DEFAULT_DE_URL = 'https://api.warframe.com/cdn/worldState.php';
 
+/** No-op debug logger so parser kuva/outpost/drop messages stay quiet (console.debug is noisy). */
+const quietParserLogger = { debug: (_message: string) => {} };
+
+/** Match warframestat drops enrichment URLs (Cloudflare HTML breaks JSON). */
+function isWarframestatDropsUrl(url: string): boolean {
+  return /warframestat\.us\/drops(?:\/|$|\?)/i.test(url) || /\/drops\/search\//i.test(url);
+}
+
+function resolveFetchUrl(input: unknown): string {
+  if (typeof input === 'string') return input;
+  if (input instanceof URL) return input.href;
+  if (input && typeof input === 'object' && 'url' in input && typeof (input as { url: unknown }).url === 'string') {
+    return (input as { url: string }).url;
+  }
+  return String(input);
+}
+
 /** Convert parser class instances → plain JSON matching warframestat shapes. */
 export function mapParsedWorldState(parsed: unknown): WorldState {
   const plain = JSON.parse(JSON.stringify(parsed)) as WorldState;
@@ -51,15 +68,36 @@ export function mapParsedWorldState(parsed: unknown): WorldState {
   return plain;
 }
 
-/** Parse raw DE worldState.php JSON string into our WorldState shape. */
+/**
+ * Parse raw DE worldState.php JSON string into our WorldState shape.
+ * Short-circuits warframestat drops enrichment fetch (Cloudflare HTML) and
+ * uses a quiet parser logger so kuva/outpost skip debug lines do not spam console.
+ */
 export async function parseDeWorldStateJson(
   raw: string,
   locale = 'zh',
 ): Promise<WorldState> {
-  const parsed = await WorldStateParser.build(raw, {
-    locale: (locale || 'zh') as 'zh',
-  });
-  return mapParsedWorldState(parsed);
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async (...args: Parameters<typeof globalThis.fetch>) => {
+    const url = resolveFetchUrl(args[0]);
+    if (isWarframestatDropsUrl(url)) {
+      return new Response('{}', {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      });
+    }
+    return originalFetch(...args);
+  }) as typeof globalThis.fetch;
+
+  try {
+    const parsed = await WorldStateParser.build(raw, {
+      locale: (locale || 'zh') as 'zh',
+      logger: quietParserLogger,
+    });
+    return mapParsedWorldState(parsed);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 }
 
 function sleep(ms: number): Promise<void> {
