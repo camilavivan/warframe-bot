@@ -3,6 +3,8 @@ import { resolve } from 'node:path';
 import { parse as parseYaml } from 'yaml';
 import { z } from 'zod';
 
+const DEFAULT_UA = 'warframe-bot/1.1 (+https://github.com/camilavivan/warframe-bot)';
+
 const ConfigSchema = z.object({
   prefix: z.array(z.string()).default(['wf ', '/']),
   logLevel: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),
@@ -12,6 +14,11 @@ const ConfigSchema = z.object({
       platform: z.string().default('pc'),
       language: z.string().default('zh'),
       cacheTtlMs: z.number().default(30_000),
+      userAgent: z.string().default(DEFAULT_UA),
+      /** Extra warframe-status bases tried after primary (e.g. self-hosted) */
+      fallbackBaseUrls: z.array(z.string()).default([]),
+      /** Optional explicit proxy; prefer HTTPS_PROXY / WARFRAMESTAT_PROXY env */
+      proxyUrl: z.string().optional(),
     })
     .default({}),
   push: z
@@ -77,6 +84,11 @@ export function loadConfig(path?: string): AppConfig {
   if (process.env.KOOK_TOKEN) cfg.kook.token = process.env.KOOK_TOKEN;
   if (process.env.LOG_LEVEL) cfg.logLevel = process.env.LOG_LEVEL as AppConfig['logLevel'];
   if (process.env.HEALTH_PORT) cfg.health.port = Number(process.env.HEALTH_PORT) || cfg.health.port;
+  if (process.env.WARFRAMESTAT_PROXY) cfg.api.proxyUrl = process.env.WARFRAMESTAT_PROXY;
+  else if (process.env.HTTPS_PROXY) cfg.api.proxyUrl = process.env.HTTPS_PROXY;
+  else if (process.env.HTTP_PROXY) cfg.api.proxyUrl = process.env.HTTP_PROXY;
+  else if (process.env.https_proxy) cfg.api.proxyUrl = process.env.https_proxy;
+  else if (process.env.http_proxy) cfg.api.proxyUrl = process.env.http_proxy;
 
   cached = cfg;
   return cfg;

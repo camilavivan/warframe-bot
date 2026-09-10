@@ -1,21 +1,13 @@
 import {
-  fetchArbitration,
-  fetchArchonHunt,
-  fetchCalendar,
-  fetchCetusCycle,
-  fetchDailyDeals,
-  fetchFissures,
-  fetchInvasions,
-  fetchSortie,
-  fetchVoidTrader,
+  fetchWorldState,
   isVoidTraderActive,
+  type WorldState,
 } from '../core/warframestat.js';
 import {
   filterFissures,
   formatArbitration,
   formatArchonHunt,
   formatCalendar,
-  formatCycle,
   formatDailyDeals,
   formatFissures,
   formatInvasions,
@@ -55,31 +47,32 @@ async function broadcast(topic: PushTopic, itemKey: string, text: string, send: 
   }
 }
 
-export async function pollOnce(send: SendFn): Promise<void> {
+/** Derive all push topics from one WorldState (no extra HTTP). */
+export async function pollFromWorldState(ws: WorldState, send: SendFn): Promise<void> {
   // Sortie
   try {
-    const sortie = await fetchSortie();
+    const sortie = ws.sortie;
     if (sortie?.id) {
       await broadcast('sortie', `sortie:${sortie.id}`, formatPushSortie(sortie), send);
     }
   } catch (err) {
-    log.warn({ err }, 'sortie poll failed');
+    log.warn({ err }, 'sortie format/push failed');
   }
 
   // Arbitration
   try {
-    const arb = await fetchArbitration();
+    const arb = ws.arbitration;
     if (arb?.node) {
       const key = `arb:${arb.node}:${arb.type}:${arb.expiry ?? ''}`;
       await broadcast('arbitration', key, `📢 仲裁刷新\n${formatArbitration(arb)}`, send);
     }
   } catch (err) {
-    log.warn({ err }, 'arbitration poll failed');
+    log.warn({ err }, 'arbitration format/push failed');
   }
 
   // Fissures — push when a new hard/storm/normal set id appears (use first few ids hash)
   try {
-    const fissures = await fetchFissures();
+    const fissures = ws.fissures || [];
     const active = filterFissures(fissures);
     if (active.length) {
       const key = `fis:${active
@@ -90,24 +83,24 @@ export async function pollOnce(send: SendFn): Promise<void> {
       await broadcast('fissures', key, `📢 裂缝更新\n${formatFissures(active)}`, send);
     }
   } catch (err) {
-    log.warn({ err }, 'fissures poll failed');
+    log.warn({ err }, 'fissures format/push failed');
   }
 
   // Cetus night
   try {
-    const cetus = await fetchCetusCycle();
+    const cetus = ws.cetusCycle;
     if (cetus && cetus.isDay === false) {
       const key = `cetus-night:${cetus.expiry ?? cetus.id ?? ''}`;
       await broadcast('cetus-night', key, formatPushCetusNight(cetus), send);
     }
   } catch (err) {
-    log.warn({ err }, 'cetus poll failed');
+    log.warn({ err }, 'cetus format/push failed');
   }
 
   // Invasions — per invasion id
   try {
-    const invasions = await fetchInvasions();
-    for (const inv of (invasions || []).filter((i) => !i.completed)) {
+    const invasions = ws.invasions || [];
+    for (const inv of invasions.filter((i) => !i.completed)) {
       if (!inv.id) continue;
       await broadcast(
         'invasions',
@@ -117,12 +110,12 @@ export async function pollOnce(send: SendFn): Promise<void> {
       );
     }
   } catch (err) {
-    log.warn({ err }, 'invasions poll failed');
+    log.warn({ err }, 'invasions format/push failed');
   }
 
   // Void trader arrival / inventory change
   try {
-    const vt = await fetchVoidTrader();
+    const vt = ws.voidTrader;
     if (vt) {
       const key = isVoidTraderActive(vt)
         ? `vt-active:${vt.id ?? vt.location}:${vt.inventory?.length ?? 0}`
@@ -130,39 +123,39 @@ export async function pollOnce(send: SendFn): Promise<void> {
       await broadcast('voidtrader', key, `📢 奸商动态\n${formatVoidTrader(vt)}`, send);
     }
   } catch (err) {
-    log.warn({ err }, 'voidtrader poll failed');
+    log.warn({ err }, 'voidtrader format/push failed');
   }
 
   // Darvo
   try {
-    const deals = await fetchDailyDeals();
-    for (const d of deals || []) {
+    const deals = ws.dailyDeals || [];
+    for (const d of deals) {
       const key = `darvo:${d.item}:${d.expiry ?? ''}`;
       await broadcast('darvo', key, `📢 特惠更新\n${formatDailyDeals([d])}`, send);
     }
   } catch (err) {
-    log.warn({ err }, 'darvo poll failed');
+    log.warn({ err }, 'darvo format/push failed');
   }
 
   // Archon
   try {
-    const hunt = await fetchArchonHunt();
+    const hunt = ws.archonHunt;
     if (hunt?.id) {
       await broadcast('archon', `archon:${hunt.id}`, `📢 猎杀刷新\n${formatArchonHunt(hunt)}`, send);
     }
   } catch (err) {
-    log.warn({ err }, 'archon poll failed');
+    log.warn({ err }, 'archon format/push failed');
   }
 
   // 1999 Hex calendar — season change or weekly window refresh
   try {
-    const cal = await fetchCalendar();
+    const cal = ws.calendar;
     if (cal) {
       const key = `calendar:${cal.season ?? ''}:${cal.yearIteration ?? ''}:${cal.activation ?? ''}:${cal.expiry ?? ''}`;
       await broadcast('calendar', key, `📢 1999 日历更新\n${formatCalendar(cal)}`, send);
     }
   } catch (err) {
-    log.warn({ err }, 'calendar poll failed');
+    log.warn({ err }, 'calendar format/push failed');
   }
 
   try {
@@ -170,6 +163,17 @@ export async function pollOnce(send: SendFn): Promise<void> {
   } catch {
     /* ignore */
   }
+}
+
+export async function pollOnce(send: SendFn): Promise<void> {
+  let ws: WorldState;
+  try {
+    ws = await fetchWorldState();
+  } catch (err) {
+    log.warn({ err }, 'worldstate poll failed');
+    return;
+  }
+  await pollFromWorldState(ws, send);
 }
 
 export function startPoller(intervalMs: number, send: SendFn): NodeJS.Timeout {

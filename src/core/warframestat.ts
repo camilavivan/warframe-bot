@@ -1,4 +1,4 @@
-import { fetch } from 'undici';
+import { fetch, ProxyAgent, type Dispatcher } from 'undici';
 import { loadConfig } from '../config.js';
 import { globalCache } from './cache.js';
 import { logger } from './logger.js';
@@ -349,32 +349,200 @@ export interface WmItemResult {
 
 const log = logger.child({ module: 'warframestat' });
 
-function apiUrl(path: string): string {
+/** Map of WorldState field → subpath (used when field missing from cached worldstate). */
+export const WORLDSTATE_FIELD_PATHS = {
+  sortie: '/sortie',
+  arbitration: '/arbitration',
+  fissures: '/fissures',
+  invasions: '/invasions',
+  voidTrader: '/voidTrader',
+  dailyDeals: '/dailyDeals',
+  alerts: '/alerts',
+  news: '/news',
+  events: '/events',
+  nightwave: '/nightwave',
+  archonHunt: '/archonHunt',
+  constructionProgress: '/constructionProgress',
+  syndicateMissions: '/syndicateMissions',
+  cetusCycle: '/cetusCycle',
+  earthCycle: '/earthCycle',
+  vallisCycle: '/vallisCycle',
+  cambionCycle: '/cambionCycle',
+  zarimanCycle: '/zarimanCycle',
+  calendar: '/calendar',
+  archimedeas: '/archimedeas',
+  duviriCycle: '/duviriCycle',
+} as const;
+
+export type WorldStateField = keyof typeof WORLDSTATE_FIELD_PATHS;
+
+/** Read a typed field from a WorldState object (for tests / poller). */
+export function pickWorldStateField<K extends WorldStateField>(
+  ws: WorldState,
+  field: K,
+): WorldState[K] | undefined {
+  const v = ws[field];
+  if (v === undefined || v === null) return undefined;
+  return v as WorldState[K];
+}
+
+let proxyAgent: ProxyAgent | null = null;
+let proxyAgentUri: string | null = null;
+
+function resolveProxyUri(): string | undefined {
   const cfg = loadConfig();
-  const base = cfg.api.baseUrl.replace(/\/$/, '');
+  return (
+    cfg.api.proxyUrl ||
+    process.env.WARFRAMESTAT_PROXY ||
+    process.env.HTTPS_PROXY ||
+    process.env.HTTP_PROXY ||
+    process.env.https_proxy ||
+    process.env.http_proxy ||
+    undefined
+  );
+}
+
+function getDispatcher(): Dispatcher | undefined {
+  const uri = resolveProxyUri();
+  if (!uri) return undefined;
+  if (!proxyAgent || proxyAgentUri !== uri) {
+    proxyAgent?.close().catch(() => undefined);
+    proxyAgent = new ProxyAgent(uri);
+    proxyAgentUri = uri;
+    log.info({ proxy: uri.replace(/\/\/[^@]+@/, '//***@') }, 'using HTTP proxy');
+  }
+  return proxyAgent;
+}
+
+function apiUrlForBase(baseUrl: string, path: string): string {
+  const cfg = loadConfig();
+  const base = baseUrl.replace(/\/$/, '');
   const platform = cfg.api.platform;
   const lang = cfg.api.language;
   const sep = path.includes('?') ? '&' : '?';
   return `${base}/${platform}${path}${sep}language=${lang}`;
 }
 
+function apiUrl(path: string): string {
+  return apiUrlForBase(loadConfig().api.baseUrl, path);
+}
+
+function requestHeaders(): Record<string, string> {
+  const cfg = loadConfig();
+  return {
+    Accept: 'application/json',
+    'Accept-Language': cfg.api.language,
+    'User-Agent': cfg.api.userAgent,
+  };
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
+function shouldRetryStatus(status: number): boolean {
+  return status === 403 || status === 429 || status >= 500;
+}
+
+async function readBodySnippet(res: { text(): Promise<string> }): Promise<string> {
+  try {
+    const text = await res.text();
+    return text.slice(0, 200).replace(/\s+/g, ' ').trim();
+  } catch {
+    return '';
+  }
+}
+
+async function fetchOnce(url: string): Promise<{ ok: true; data: unknown } | { ok: false; status: number; snippet: string }> {
+  const dispatcher = getDispatcher();
+  const opts: Parameters<typeof fetch>[1] = {
+    headers: requestHeaders(),
+    ...(dispatcher ? { dispatcher } : {}),
+  };
+  log.debug({ url }, 'fetch');
+  const res = await fetch(url, opts);
+  if (res.ok) {
+    const data = await res.json();
+    return { ok: true, data };
+  }
+  const snippet = await readBodySnippet(res);
+  return { ok: false, status: res.status, snippet };
+}
+
+async function fetchWithRetry(url: string): Promise<unknown> {
+  let lastStatus = 0;
+  let lastSnippet = '';
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const result = await fetchOnce(url);
+    if (result.ok) return result.data;
+    lastStatus = result.status;
+    lastSnippet = result.snippet;
+    if (attempt === 0 && shouldRetryStatus(result.status)) {
+      const delay = result.status === 429 ? 1500 : 400;
+      log.warn({ url, status: result.status, attempt }, 'retry after short delay');
+      await sleep(delay);
+      continue;
+    }
+    break;
+  }
+  const snip = lastSnippet ? ` body=${JSON.stringify(lastSnippet)}` : '';
+  throw new Error(`HTTP ${lastStatus} for ${url}${snip}`);
+}
+
+async function getJsonAbsolute<T>(url: string, ttlMs: number): Promise<T> {
+  const cached = globalCache.get<T>(url);
+  if (cached !== undefined) return cached;
+  const data = (await fetchWithRetry(url)) as T;
+  globalCache.set(url, data, ttlMs);
+  return data;
+}
+
+async function getJsonRelative<T>(path: string, ttlMs: number): Promise<T> {
+  const cfg = loadConfig();
+  const cacheKey = `wsrel:${cfg.api.platform}:${cfg.api.language}:${path}`;
+  const cached = globalCache.get<T>(cacheKey);
+  if (cached !== undefined) return cached;
+
+  const bases = [cfg.api.baseUrl, ...(cfg.api.fallbackBaseUrls || [])];
+  let lastErr: unknown;
+  for (let i = 0; i < bases.length; i++) {
+    const url = apiUrlForBase(bases[i], path);
+    try {
+      const data = (await fetchWithRetry(url)) as T;
+      globalCache.set(cacheKey, data, ttlMs);
+      // also cache under URL for debug parity
+      globalCache.set(url, data, ttlMs);
+      if (i > 0) log.info({ base: bases[i], path }, 'fallback baseUrl succeeded');
+      return data;
+    } catch (err) {
+      lastErr = err;
+      log.warn({ err, base: bases[i], path, index: i }, 'baseUrl attempt failed');
+    }
+  }
+  throw lastErr instanceof Error ? lastErr : new Error(String(lastErr));
+}
+
 async function getJson<T>(pathOrUrl: string, ttlMs?: number, absolute = false): Promise<T> {
   const cfg = loadConfig();
   const ttl = ttlMs ?? cfg.api.cacheTtlMs;
-  const url = absolute ? pathOrUrl : apiUrl(pathOrUrl);
-  const cached = globalCache.get<T>(url);
-  if (cached !== undefined) return cached;
+  if (absolute) return getJsonAbsolute<T>(pathOrUrl, ttl);
+  return getJsonRelative<T>(pathOrUrl, ttl);
+}
 
-  log.debug({ url }, 'fetch');
-  const res = await fetch(url, {
-    headers: { Accept: 'application/json', 'Accept-Language': cfg.api.language },
-  });
-  if (!res.ok) {
-    throw new Error(`HTTP ${res.status} for ${url}`);
+/**
+ * Prefer a field from the cached full worldstate; only hit the subpath if missing.
+ */
+async function fromWorldState<K extends WorldStateField>(field: K): Promise<NonNullable<WorldState[K]>> {
+  const path = WORLDSTATE_FIELD_PATHS[field];
+  try {
+    const ws = await fetchWorldState();
+    const v = pickWorldStateField(ws, field);
+    if (v !== undefined) return v as NonNullable<WorldState[K]>;
+    log.debug({ field }, 'worldstate field missing, using subpath');
+  } catch (err) {
+    log.debug({ err, field }, 'worldstate unavailable, using subpath');
   }
-  const data = (await res.json()) as T;
-  globalCache.set(url, data, ttl);
-  return data;
+  return getJson(path);
 }
 
 export async function fetchWorldState(): Promise<WorldState> {
@@ -382,87 +550,87 @@ export async function fetchWorldState(): Promise<WorldState> {
 }
 
 export async function fetchSortie(): Promise<Sortie> {
-  return getJson('/sortie');
+  return fromWorldState('sortie');
 }
 
 export async function fetchArbitration(): Promise<Arbitration> {
-  return getJson('/arbitration');
+  return fromWorldState('arbitration');
 }
 
 export async function fetchFissures(): Promise<Fissure[]> {
-  return getJson('/fissures');
+  return fromWorldState('fissures');
 }
 
 export async function fetchInvasions(): Promise<Invasion[]> {
-  return getJson('/invasions');
+  return fromWorldState('invasions');
 }
 
 export async function fetchVoidTrader(): Promise<VoidTrader> {
-  return getJson('/voidTrader');
+  return fromWorldState('voidTrader');
 }
 
 export async function fetchDailyDeals(): Promise<DailyDeal[]> {
-  return getJson('/dailyDeals');
+  return fromWorldState('dailyDeals');
 }
 
 export async function fetchAlerts(): Promise<AlertItem[]> {
-  return getJson('/alerts');
+  return fromWorldState('alerts');
 }
 
 export async function fetchNews(): Promise<NewsItem[]> {
-  return getJson('/news');
+  return fromWorldState('news');
 }
 
 export async function fetchEvents(): Promise<EventItem[]> {
-  return getJson('/events');
+  return fromWorldState('events');
 }
 
 export async function fetchNightwave(): Promise<Nightwave> {
-  return getJson('/nightwave');
+  return fromWorldState('nightwave');
 }
 
 export async function fetchArchonHunt(): Promise<ArchonHunt> {
-  return getJson('/archonHunt');
+  return fromWorldState('archonHunt');
 }
 
 export async function fetchConstruction(): Promise<ConstructionProgress> {
-  return getJson('/constructionProgress');
+  return fromWorldState('constructionProgress');
 }
 
 export async function fetchSyndicateMissions(): Promise<SyndicateMission[]> {
-  return getJson('/syndicateMissions');
+  return fromWorldState('syndicateMissions');
 }
 
 export async function fetchCetusCycle(): Promise<Cycle> {
-  return getJson('/cetusCycle');
+  return fromWorldState('cetusCycle');
 }
 
 export async function fetchEarthCycle(): Promise<Cycle> {
-  return getJson('/earthCycle');
+  return fromWorldState('earthCycle');
 }
 
 export async function fetchVallisCycle(): Promise<Cycle> {
-  return getJson('/vallisCycle');
+  return fromWorldState('vallisCycle');
 }
 
 export async function fetchCambionCycle(): Promise<Cycle> {
-  return getJson('/cambionCycle');
+  return fromWorldState('cambionCycle');
 }
 
 export async function fetchZarimanCycle(): Promise<Cycle> {
-  return getJson('/zarimanCycle');
+  return fromWorldState('zarimanCycle');
 }
 
 export async function fetchCalendar(): Promise<Calendar1999> {
-  return getJson('/calendar');
+  return fromWorldState('calendar');
 }
 
 export async function fetchArchimedeas(): Promise<Archimedea[]> {
-  return getJson('/archimedeas');
+  return fromWorldState('archimedeas');
 }
 
 export async function fetchDuviriCycle(): Promise<DuviriCycle> {
-  return getJson('/duviriCycle');
+  return fromWorldState('duviriCycle');
 }
 
 /** Warframe.market item orders (language-agnostic url_name) */

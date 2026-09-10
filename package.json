@@ -1,14 +1,14 @@
 {
   "name": "warframe-bot",
   "version": "1.1.0",
-  "description": "Warframe 信息查询与世界状态推送机器人（QQ/OneBot + KOOK）",
+  "description": "Warframe \u4fe1\u606f\u67e5\u8be2\u4e0e\u4e16\u754c\u72b6\u6001\u63a8\u9001\u673a\u5668\u4eba\uff08QQ/OneBot + KOOK\uff09",
   "type": "module",
   "main": "dist/index.js",
   "scripts": {
     "build": "tsc",
     "start": "node dist/index.js",
     "dry-run": "tsx src/core/dry-run.ts",
-    "test": "tsx --test tests/formatters.test.ts tests/formatters-2026.test.ts tests/dedupe.test.ts tests/locale.test.ts",
+    "test": "tsx --test tests/formatters.test.ts tests/formatters-2026.test.ts tests/dedupe.test.ts tests/locale.test.ts tests/worldstate.test.ts",
     "dev": "tsx src/index.ts",
     "fetch-lexicon": "node scripts/fetch-zh-lexicon.mjs"
   },

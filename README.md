@@ -161,6 +161,7 @@ kook:
 | 健康检查失败 / OneBot 关闭 | 确认 `health.port` 暴露；`curl localhost:6700/health` |
 | Docker 访问不到宿主机 OneBot | `apiBase` 用 `http://host.docker.internal:5700`，并保留 `extra_hosts` |
 | 奸商显示异常 | 新版 API 可能省略 `active` 字段，机器人会按 activation/expiry 推算 |
+| 腾讯云等机房 IP 访问 `api.warframestat.us` 被 Cloudflare **HTTP 403** | 设置出网代理环境变量 `HTTPS_PROXY`（或 `WARFRAMESTAT_PROXY` / config `api.proxyUrl`）；或自建 [WFCD/warframe-status](https://github.com/WFCD/warframe-status) 把 `api.baseUrl` 指过去，必要时用 `api.fallbackBaseUrls`。新版本每轮推送只请求一次完整 worldstate（`/pc?language=zh`），降低请求频次 |
 
 ## 项目结构
 

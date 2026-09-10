@@ -19,6 +19,7 @@ services:
       # - KOOK_TOKEN=
       # - ONEBOT_ACCESS_TOKEN=
       # - ONEBOT_API_ACCESS_TOKEN=
+      # - HTTPS_PROXY=http://host.docker.internal:7890
     # 访问宿主机上的 OneBot HTTP API（config 中 apiBase: http://host.docker.internal:5700）
     extra_hosts:
       - "host.docker.internal:host-gateway"
