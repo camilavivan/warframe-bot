@@ -48,6 +48,14 @@
 
 ## 一键 Docker 部署（推荐）
 
+> **国内服务器**：已去掉 `# syntax=docker/dockerfile:1`，避免额外访问 Docker Hub。若拉取 `node` 仍超时，用镜像源构建：
+> ```bash
+> docker-compose build --build-arg NODE_IMAGE=docker.m.daocloud.io/library/node:22-bookworm-slim
+> docker-compose up -d
+> ```
+> 或配置 `/etc/docker/daemon.json` 的 `registry-mirrors` 后重启 dockerd。也可尝试关闭 BuildKit：`DOCKER_BUILDKIT=0 docker-compose up -d --build`。
+
+
 ```bash
 git clone https://github.com/camilavivan/warframe-bot.git
 cd warframe-bot
