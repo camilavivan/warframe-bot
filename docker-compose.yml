@@ -45,8 +45,12 @@ services:
     volumes:
       - ./config.yaml:/app/config.yaml:ro
       - ./data:/app/data
+    # 宿主机 .env（勿提交）。旧版 compose 用字符串形式；没有文件时需自行 touch .env
+    env_file:
+      - .env
     environment:
       - LOG_LEVEL=info
+      # QQ 凭证只走 env_file:.env（勿在此写空默认值，会覆盖掉密钥）
       # - WARFRAMESTAT_MOCK=1
     extra_hosts:
       - "host.docker.internal:host-gateway"
