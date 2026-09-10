@@ -7,6 +7,7 @@ import {
   filterFissures,
   formatArchimedeas,
   formatCalendar,
+  formatCycle,
   formatDuviri,
   formatFissures,
   formatVoidTrader,
@@ -58,8 +59,18 @@ describe('formatArchimedeas', () => {
     const text = formatArchimedeas(list);
     assert.match(text, /深层研习/);
     assert.match(text, /时空研习/);
+    assert.doesNotMatch(text, /Deep Archimedea|Temporal Archimedea/);
     assert.match(text, /偏差/);
     assert.match(text, /个人修正/);
+  });
+
+  it('translates EN deviation/risk/modifier names via zh()', () => {
+    const text = formatArchimedeas(list);
+    // fixture has English Parasitic Towers / Hypersensitive etc.
+    assert.match(text, /寄生高塔/);
+    assert.match(text, /过度敏感|牵连|短视弹药/);
+    assert.doesNotMatch(text, /Parasitic Towers/);
+    assert.doesNotMatch(text, /Hypersensitive/);
   });
 });
 
@@ -111,5 +122,44 @@ describe('voidTrader without active field', () => {
     };
     assert.equal(isVoidTraderActive(v), true);
     assert.match(formatVoidTrader(v), /已抵达/);
+  });
+});
+
+describe('formatCycle zariman', () => {
+  it('shows Corpus side in Chinese when isCorpus===true', () => {
+    const text = formatCycle(
+      {
+        isCorpus: true,
+        state: 'corpus',
+        timeLeft: '2h 27m',
+        expiry: new Date(Date.now() + 2.5 * 3600_000).toISOString(),
+      },
+      '扎里曼',
+    );
+    assert.match(text, /扎里曼/);
+    assert.match(text, /状态：Corpus/);
+    assert.doesNotMatch(text, /状态：corpus/);
+    assert.doesNotMatch(text, /\d+h\s*\d+m/);
+  });
+
+  it('shows Grineer side in Chinese when isCorpus===false', () => {
+    const text = formatCycle(
+      {
+        isCorpus: false,
+        state: 'grineer',
+        timeLeft: '-2h 27m',
+        expiry: new Date(Date.now() + 90 * 60_000).toISOString(),
+      },
+      '扎里曼',
+    );
+    assert.match(text, /状态：格里尼尔/);
+    assert.doesNotMatch(text, /状态：grineer/i);
+  });
+
+  it('translates Vome/Fass via zh()', () => {
+    const vome = formatCycle({ isVome: true, expiry: new Date(Date.now() + 600_000).toISOString() }, '火卫二');
+    const fass = formatCycle({ isVome: false, expiry: new Date(Date.now() + 600_000).toISOString() }, '火卫二');
+    assert.match(vome, /沃姆/);
+    assert.match(fass, /法斯/);
   });
 });

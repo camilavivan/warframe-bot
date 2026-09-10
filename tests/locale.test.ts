@@ -26,6 +26,14 @@ describe('locale zh()', () => {
     assert.equal(zh('The Murmur'), '细语者');
     assert.equal(zh('Day'), '白天');
     assert.equal(zh('Fass'), '法斯');
+    assert.equal(zh('Vome'), '沃姆');
+    assert.equal(zh('Grineer'), '格里尼尔');
+    assert.equal(zh('Corpus'), 'Corpus');
+    assert.equal(zh('Infested'), '感染者');
+    assert.equal(zh('Orokin'), '奥罗金');
+    assert.equal(zh('Sentient'), '感触者');
+    assert.equal(zh('Parasitic Towers'), '寄生高塔');
+    assert.equal(zh('Hypersensitive'), '过度敏感');
   });
 
   it('returns original when unknown', () => {

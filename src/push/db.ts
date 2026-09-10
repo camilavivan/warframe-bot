@@ -85,7 +85,7 @@ export function resolvePushTopic(input: string): PushTopic | null {
 
 /** Multi-line topic help for 订阅 / 菜单 (uses 「」 not <>). */
 export function formatPushTopicsHelp(): string {
-  return PUSH_TOPICS.map((t) => `· ${PUSH_TOPIC_LABELS[t]} 「${t}」`).join('\n');
+  return PUSH_TOPICS.map((t) => `· ${PUSH_TOPIC_LABELS[t]}`).join('\n');
 }
 
 export interface Subscriber {

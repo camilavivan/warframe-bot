@@ -264,27 +264,58 @@ export function formatBounties(missions: SyndicateMission[], syndicateHint: stri
   return lines.join('\n');
 }
 
+/** Lightly localize API durations like `2h 13m 54s` / `-2h 27m`. */
+function localizeDuration(s: string): string {
+  return s
+    .replace(/(\d+)\s*d\b/gi, '$1天')
+    .replace(/(\d+)\s*h\b/gi, '$1时')
+    .replace(/(\d+)\s*m\b/gi, '$1分')
+    .replace(/(\d+)\s*s\b/gi, '$1秒')
+    .replace(/\s+/g, '')
+    .trim();
+}
+
+function looksEnglishDuration(s?: string): boolean {
+  if (!s) return false;
+  return /\d\s*[dhms]\b/i.test(s) || /\bto\b/i.test(s);
+}
+
+function formatCycleRemaining(c: Cycle): string {
+  if (c.expiry) {
+    const fromExpiry = formatEta(undefined, c.expiry);
+    if (!c.timeLeft || looksEnglishDuration(c.timeLeft)) return fromExpiry;
+  }
+  if (c.timeLeft) {
+    return looksEnglishDuration(c.timeLeft) ? localizeDuration(c.timeLeft) || c.timeLeft : c.timeLeft;
+  }
+  return '未知';
+}
+
 export function formatCycle(c: Cycle | null | undefined, name: string): string {
   if (!c) return `无${name}周期信息。`;
-  let state = c.state ?? '';
-  if (c.isDay !== undefined) state = c.isDay ? '白天' : '夜晚';
-  if (c.isWarm !== undefined) state = c.isWarm ? '温暖' : '寒冷';
-  if (c.isVome !== undefined) state = c.isVome ? 'Vome' : 'Fass';
-  return [`【${name}】`, `状态：${state || c.shortString || '?'}`, `剩余：${c.timeLeft ?? formatEta(undefined, c.expiry)}`].join(
-    '\n',
-  );
+  let state = '';
+  if (c.isCorpus === true) state = 'Corpus';
+  else if (c.isCorpus === false) state = 'Grineer';
+  else if (c.isDay !== undefined) state = c.isDay ? '白天' : '夜晚';
+  else if (c.isWarm !== undefined) state = c.isWarm ? '温暖' : '寒冷';
+  else if (c.isVome !== undefined) state = c.isVome ? 'Vome' : 'Fass';
+  else if (c.state) state = c.state;
+  else if (c.shortString) state = c.shortString;
+  const stateZh = zh(state) || state || '?';
+  return [`【${name}】`, `状态：${stateZh}`, `剩余：${formatCycleRemaining(c)}`].join('\n');
 }
 
 export function formatNightwave(nw: Nightwave | null | undefined): string {
   if (!nw) return '当前无电波信息。';
   const lines = [
-    `【电波】第 ${nw.season ?? '?'} 季 · 阶段 ${nw.phase ?? '?'}`,
+    `【电波】第${nw.season ?? '?'}季 · 阶段 ${nw.phase ?? '?'}`,
     `剩余：${formatEta(undefined, nw.expiry)}`,
   ];
   for (const ch of nw.activeChallenges || []) {
     const tag = ch.isElite ? '精英' : ch.isDaily ? '日常' : '周常';
-    lines.push(`· [${tag}] ${ch.title ?? '?'} (+${ch.reputation ?? 0})`);
-    if (ch.desc) lines.push(`  ${ch.desc}`);
+    const title = zh(ch.title) || ch.title || '?';
+    lines.push(`· [${tag}] ${title} (+${ch.reputation ?? 0})`);
+    if (ch.desc) lines.push(`  ${zh(ch.desc) || ch.desc}`);
   }
   return lines.join('\n');
 }
@@ -366,10 +397,10 @@ export function formatMenu(prefix: string): string {
     '',
     '推送：订阅列表 / 订阅 「主题」 / 取消订阅 「主题」',
     '推送主题（中英均可订阅）：',
-    '  世界状态 「worldstate」— 全部世界状态变更',
-    '  特殊事件 「events」 / 突击 「sortie」 / 仲裁 「arbitration」',
-    '  裂缝 「fissures」 / 平原夜 「cetus-night」 / 入侵 「invasions」',
-    '  奸商 「voidtrader」 / 特惠 「darvo」 / 猎杀 「archon」 / 日历 「calendar」',
+    '  世界状态 — 全部世界状态变更',
+    '  特殊事件 / 突击 / 仲裁',
+    '  裂缝 / 平原夜 / 入侵',
+    '  奸商 / 特惠 / 猎杀 / 日历',
   ].join('\n');
 }
 
@@ -463,34 +494,42 @@ function formatOneArchimedea(a: Archimedea, title: string): string {
   ];
   (a.missions || []).forEach((m, i) => {
     lines.push(`${i + 1}. ${zh(m.missionType) || m.missionType || '?'} · ${zh(m.faction) || m.faction || '?'}`);
-    if (m.deviation?.name) {
-      lines.push(`   偏差：${m.deviation.name}${m.deviation.description ? ` — ${m.deviation.description}` : ''}`);
+    if (m.deviation?.name || m.deviation?.key) {
+      const name = zh(m.deviation.key) || zh(m.deviation.name) || m.deviation.name || m.deviation.key || '?';
+      const desc = m.deviation.description
+        ? zh(m.deviation.description) || m.deviation.description
+        : '';
+      lines.push(`   偏差：${name}${desc ? ` — ${desc}` : ''}`);
     }
     for (const r of m.risks || []) {
       const hard = r.isHard ? ' [钢]' : '';
-      lines.push(`   风险${hard}：${r.name ?? r.key ?? '?'}${r.description ? ` — ${r.description}` : ''}`);
+      const name = zh(r.key) || zh(r.name) || r.name || r.key || '?';
+      const desc = r.description ? zh(r.description) || r.description : '';
+      lines.push(`   风险${hard}：${name}${desc ? ` — ${desc}` : ''}`);
     }
   });
   if (a.personalModifiers?.length) {
     lines.push('个人修正：');
     for (const pm of a.personalModifiers) {
-      lines.push(`· ${pm.name ?? pm.key ?? '?'}${pm.description ? ` — ${pm.description}` : ''}`);
+      const name = zh(pm.key) || zh(pm.name) || pm.name || pm.key || '?';
+      const desc = pm.description ? zh(pm.description) || pm.description : '';
+      lines.push(`· ${name}${desc ? ` — ${desc}` : ''}`);
     }
   }
   return lines.join('\n');
 }
 
 export function formatArchimedeas(list: Archimedea[] | null | undefined): string {
-  if (!list?.length) return '当前无深层研习 / 时空研习（Archimedea）信息。';
+  if (!list?.length) return '当前无深层研习 / 时空研习信息。';
   const deep = list.find(isDeepArchimedea);
   const temporal = list.find(isTemporalArchimedea);
   const parts: string[] = [];
-  if (deep) parts.push(formatOneArchimedea(deep, '深层研习 Deep Archimedea'));
-  if (temporal) parts.push(formatOneArchimedea(temporal, '时空研习 Temporal Archimedea'));
+  if (deep) parts.push(formatOneArchimedea(deep, '深层研习'));
+  if (temporal) parts.push(formatOneArchimedea(temporal, '时空研习'));
   // Fallback: show unnamed entries
   for (const a of list) {
     if (a === deep || a === temporal) continue;
-    parts.push(formatOneArchimedea(a, `研习 ${a.typeKey || a.type || a.id || '?'}`));
+    parts.push(formatOneArchimedea(a, `研习`));
   }
   return parts.join('\n\n') || '当前无研习信息。';
 }

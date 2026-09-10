@@ -271,6 +271,8 @@ export interface Cycle {
   isDay?: boolean;
   isWarm?: boolean;
   isVome?: boolean;
+  /** Zariman: true = Corpus side, false = Grineer side */
+  isCorpus?: boolean;
   state?: string;
   timeLeft?: string;
   shortString?: string;

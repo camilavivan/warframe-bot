@@ -416,8 +416,8 @@ export function registerAllCommands(): void {
         return;
       }
       const lines = topics.map((t: PushTopic) => {
-        const zh = PUSH_TOPIC_LABELS[t] ?? t;
-        return `· ${zh} 「${t}」`;
+        const label = PUSH_TOPIC_LABELS[t] ?? t;
+        return `· ${label}`;
       });
       await ctx.reply(`【订阅列表·${where}】\n${lines.join('\n')}`);
     },
@@ -438,7 +438,7 @@ export function registerAllCommands(): void {
         return;
       }
       const ok = subscribe(safePlatform(ctx.platform), ctx.chatId, topic, ctx.chatType);
-      const label = `${PUSH_TOPIC_LABELS[topic]} 「${topic}」`;
+      const label = PUSH_TOPIC_LABELS[topic] ?? topic;
       await ctx.reply(ok ? `已订阅：${label}` : `已订阅过：${label}`);
     },
   });
@@ -458,7 +458,7 @@ export function registerAllCommands(): void {
         return;
       }
       const ok = unsubscribe(safePlatform(ctx.platform), ctx.chatId, topic);
-      const label = `${PUSH_TOPIC_LABELS[topic]} 「${topic}」`;
+      const label = PUSH_TOPIC_LABELS[topic] ?? topic;
       await ctx.reply(ok ? `已取消：${label}` : `未订阅：${label}`);
     },
   });

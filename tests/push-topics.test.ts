@@ -68,14 +68,17 @@ describe('push topic aliases', () => {
     assert.ok(!WORLDSTATE_CHILD_TOPICS.includes('worldstate' as never));
   });
 
-  it('topic help and menu use 「」 not raw <>', () => {
+  it('topic help and menu are Chinese-only (no raw English keys)', () => {
     const help = formatPushTopicsHelp();
-    assert.match(help, /世界状态 「worldstate」/);
-    assert.match(help, /特殊事件 「events」/);
+    assert.match(help, /^· 世界状态$/m);
+    assert.match(help, /^· 特殊事件$/m);
+    assert.doesNotMatch(help, /worldstate/);
     assert.doesNotMatch(help, /<worldstate>/);
+    assert.doesNotMatch(help, /「worldstate」/);
     const menu = formatMenu('wf ');
-    assert.match(menu, /世界状态 「worldstate」/);
-    assert.match(menu, /特殊事件 「events」/);
+    assert.match(menu, /世界状态 — 全部世界状态变更/);
+    assert.match(menu, /特殊事件 \/ 突击 \/ 仲裁/);
+    assert.doesNotMatch(menu, /「worldstate」/);
     assert.doesNotMatch(menu, /<[^「」\n]+>/);
   });
 });
