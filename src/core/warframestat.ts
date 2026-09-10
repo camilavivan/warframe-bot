@@ -619,8 +619,26 @@ async function fromWorldState<K extends WorldStateField>(field: K): Promise<NonN
   } catch (err) {
     log.debug({ err, field }, 'worldstate unavailable, using subpath');
   }
-  // DE source: do not hit Cloudflare warframestat (CN 403); surface missing field
+  // DE source: do not hit Cloudflare warframestat (CN 403).
+  // Missing optional fields soft-fail (arbitration needs external kuva feed).
   if (!cfg.api.mock && cfg.api.source === 'de') {
+    if (field === 'arbitration') {
+      return { node: 'SolNode000', type: 'Unknown' } as NonNullable<WorldState[K]>;
+    }
+    const emptyArrays = new Set([
+      'fissures',
+      'invasions',
+      'alerts',
+      'news',
+      'events',
+      'dailyDeals',
+      'syndicateMissions',
+      'archimedeas',
+      'voidTraders',
+    ]);
+    if (emptyArrays.has(field)) {
+      return [] as NonNullable<WorldState[K]>;
+    }
     throw new Error(`DE worldstate missing field: ${field}`);
   }
   return getJson(path);

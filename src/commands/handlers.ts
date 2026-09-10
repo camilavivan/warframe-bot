@@ -288,7 +288,7 @@ export function registerAllCommands(): void {
     description: 'Warframe.market 价格',
     async handle(ctx) {
       if (!ctx.args.trim()) {
-        await ctx.reply('用法：wm <物品名>\n例如：wm primed continuity');
+        await ctx.reply('用法：wm 「物品名」\n例如：wm primed continuity');
         return;
       }
       const result = await searchWmOrders(ctx.args.trim());
@@ -302,7 +302,7 @@ export function registerAllCommands(): void {
     description: '物品名/术语中英互译与搜索',
     async handle(ctx) {
       if (!ctx.args.trim()) {
-        await ctx.reply('用法：翻译 <关键词>');
+        await ctx.reply('用法：翻译 「关键词」');
         return;
       }
       const kw = ctx.args.trim();
@@ -356,7 +356,7 @@ export function registerAllCommands(): void {
       }
       const topic = ctx.args.trim().toLowerCase();
       if (!topic || !isPushTopic(topic)) {
-        await ctx.reply(`用法：订阅 <主题>\n可用：${PUSH_TOPICS.join(', ')}`);
+        await ctx.reply(`用法：订阅 「主题」\n可用：${PUSH_TOPICS.join(', ')}`);
         return;
       }
       const ok = subscribe(safePlatform(ctx.platform), ctx.chatId, topic, ctx.chatType);
@@ -375,7 +375,7 @@ export function registerAllCommands(): void {
       }
       const topic = ctx.args.trim().toLowerCase();
       if (!topic || !isPushTopic(topic)) {
-        await ctx.reply(`用法：取消订阅 <主题>\n可用：${PUSH_TOPICS.join(', ')}`);
+        await ctx.reply(`用法：取消订阅 「主题」\n可用：${PUSH_TOPICS.join(', ')}`);
         return;
       }
       const ok = unsubscribe(safePlatform(ctx.platform), ctx.chatId, topic);

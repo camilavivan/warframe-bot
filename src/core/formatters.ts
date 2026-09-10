@@ -51,10 +51,10 @@ export function formatSortie(s: Sortie | null | undefined): string {
 }
 
 export function formatArbitration(a: Arbitration | null | undefined): string {
-  if (!a || !a.node) return '当前无仲裁信息（API 可能未提供）。';
+  if (!a || !a.node) return '当前无仲裁（DE 源暂无，需 kuva 数据源）。';
   // warframestat often returns placeholder when arbitration is unavailable
   if (a.node === 'SolNode000' || a.type === 'Unknown') {
-    return '当前无有效仲裁（API 返回占位数据）。';
+    return '当前无仲裁（DE 源暂无有效节点）。';
   }
   const flags = [a.archwing ? 'Archwing' : '', a.sharkwing ? 'Sharkwing' : ''].filter(Boolean).join('/');
   return [
@@ -113,9 +113,11 @@ export function formatInvasions(list: Invasion[]): string {
   for (const i of active.slice(0, 15)) {
     const ar = i.attackerReward?.asString || (i.vsInfestation ? '—' : '无');
     const dr = i.defenderReward?.asString || '无';
+    const af = zh(i.attackingFaction) || i.attackingFaction || '?';
+    const df = zh(i.defendingFaction) || i.defendingFaction || '?';
     lines.push(
       `· ${i.node ?? '?'} (${Math.round(i.completion ?? 0)}%)`,
-      `  ${i.attackingFaction ?? '?'} [${ar}] vs ${i.defendingFaction ?? '?'} [${dr}]`,
+      `  ${af} [${ar}] vs ${df} [${dr}]`,
     );
   }
   return lines.join('\n');
@@ -290,10 +292,10 @@ export function formatMenu(prefix: string): string {
     '赏金：赏金 地球|金星|火卫二',
     '周期：平原 / 地球 / 金星 / 火卫二 / 扎里曼',
     '',
-    '市场：wm <物品名>',
-    '翻译：翻译 <关键词>',
+    '市场：wm 「物品名」',
+    '翻译：翻译 「关键词」',
     '',
-    '推送：订阅列表 / 订阅 <主题> / 取消订阅 <主题>',
+    '推送：订阅列表 / 订阅 「主题」 / 取消订阅 「主题」',
     '主题：sortie arbitration fissures cetus-night invasions voidtrader darvo archon calendar',
   ].join('\n');
 }

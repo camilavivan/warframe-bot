@@ -65,6 +65,61 @@ export function mapParsedWorldState(parsed: unknown): WorldState {
     delete plain.arbitration;
   }
 
+  // Parser invasions are nested (attacker/defender); flatten for formatInvasions
+  if (Array.isArray((plain as { invasions?: unknown }).invasions)) {
+    type NestedReward = {
+      asString?: string;
+      credits?: number;
+      countedItems?: Array<{ type?: string; key?: string; count?: number }>;
+      items?: string[];
+      thumbnail?: string;
+    };
+    type NestedSide = { faction?: string; reward?: NestedReward };
+    type NestedInvasion = {
+      attackingFaction?: string;
+      defendingFaction?: string;
+      attackerReward?: NestedReward;
+      defenderReward?: NestedReward;
+      attacker?: NestedSide;
+      defender?: NestedSide;
+      [k: string]: unknown;
+    };
+    const rewardAsString = (reward?: NestedReward): string | undefined => {
+      if (!reward) return undefined;
+      if (reward.asString?.trim()) return reward.asString;
+      const parts: string[] = [];
+      for (const it of reward.countedItems ?? []) {
+        const name = (it.type || it.key || '').trim();
+        if (!name) continue;
+        parts.push(it.count && it.count > 1 ? `${name}×${it.count}` : name);
+      }
+      for (const it of reward.items ?? []) {
+        if (it?.trim()) parts.push(it.trim());
+      }
+      if (reward.credits && reward.credits > 0) parts.push(`${reward.credits}cr`);
+      return parts.length ? parts.join('、') : undefined;
+    };
+    (plain as { invasions: NestedInvasion[] }).invasions = (
+      plain as { invasions: NestedInvasion[] }
+    ).invasions.map((inv) => {
+      const ar = rewardAsString(inv.attackerReward ?? inv.attacker?.reward);
+      const dr = rewardAsString(inv.defenderReward ?? inv.defender?.reward);
+      const attackerReward = ar
+        ? { ...(inv.attacker?.reward ?? inv.attackerReward ?? {}), asString: ar }
+        : inv.attackerReward;
+      const defenderReward = dr
+        ? { ...(inv.defender?.reward ?? inv.defenderReward ?? {}), asString: dr }
+        : inv.defenderReward;
+      return {
+        ...inv,
+        attackingFaction: inv.attackingFaction ?? inv.attacker?.faction,
+        defendingFaction: inv.defendingFaction ?? inv.defender?.faction,
+        attackerReward,
+        defenderReward,
+      };
+    });
+  }
+
   return plain;
 }
 
