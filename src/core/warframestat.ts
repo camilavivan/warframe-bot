@@ -276,6 +276,13 @@ export interface Cycle {
   shortString?: string;
 }
 
+export interface ArbitrationBounds {
+  resourceBonus?: number;
+  xpBonus?: number;
+  weaponXpBonusFor?: string;
+  weaponXpBonusVal?: number;
+}
+
 export interface Arbitration {
   id?: string;
   activation?: string;
@@ -286,6 +293,39 @@ export interface Arbitration {
   archwing?: boolean;
   sharkwing?: boolean;
   eta?: string;
+  /** Efficient-farm bonuses from external schedule feeds */
+  bounds?: ArbitrationBounds;
+}
+
+/** True when arbitration is missing or a known DE/warframestat stub. */
+export function isStubArbitration(a: Arbitration | null | undefined): boolean {
+  if (!a || !a.node) return true;
+  if (a.node === 'SolNode000' || a.type === 'Unknown') return true;
+  return false;
+}
+
+export interface ExternalArbitrationItem {
+  id?: string;
+  activation?: string;
+  expiry?: string;
+  node?: string;
+  missionType?: string;
+  type?: string;
+  enemy?: string;
+  eta?: string;
+  archwing?: boolean;
+  sharkwing?: boolean;
+  bounds?: ArbitrationBounds;
+  /** 10o.io-style nested payload (usually stale; kept for mapping) */
+  solnodedata?: {
+    name?: string;
+    enemy?: string;
+    type?: string;
+    archwing?: boolean;
+    sharkwing?: boolean;
+  };
+  start?: string;
+  end?: string;
 }
 
 export interface Nightwave {
@@ -660,8 +700,123 @@ export async function fetchSortie(): Promise<Sortie> {
   return fromWorldState('sortie');
 }
 
+function mapExternalArbItem(item: ExternalArbitrationItem): Arbitration {
+  const nested = item.solnodedata;
+  const node = item.node || nested?.name || '';
+  const type = item.missionType || item.type || nested?.type || '';
+  const enemy = item.enemy || nested?.enemy || '';
+  return {
+    id: item.id,
+    activation: item.activation || item.start,
+    expiry: item.expiry || item.end,
+    node,
+    type,
+    enemy,
+    eta: item.eta,
+    archwing: item.archwing ?? nested?.archwing,
+    sharkwing: item.sharkwing ?? nested?.sharkwing,
+    bounds: item.bounds,
+  };
+}
+
+function normalizeArbitrationFeed(data: unknown): ExternalArbitrationItem[] {
+  if (!data) return [];
+  if (Array.isArray(data)) return data as ExternalArbitrationItem[];
+  if (typeof data === 'object') {
+    const o = data as Record<string, unknown>;
+    for (const key of ['data', 'arbitrations', 'arbys', 'payload', 'list']) {
+      if (Array.isArray(o[key])) return o[key] as ExternalArbitrationItem[];
+    }
+  }
+  return [];
+}
+
+function arbStartMs(a: { activation?: string; start?: string }): number {
+  const s = a.activation || a.start;
+  if (!s) return NaN;
+  return new Date(s).getTime();
+}
+
+function arbEndMs(a: { expiry?: string; end?: string }): number {
+  const s = a.expiry || a.end;
+  if (!s) return NaN;
+  return new Date(s).getTime();
+}
+
+/** Fetch + cache external kuva arbitration schedule (never warframestat.us). */
+export async function fetchArbitrationSchedule(): Promise<Arbitration[]> {
+  const cfg = loadConfig();
+  const url = (cfg.api.arbitrationUrl || '').trim();
+  if (!url) return [];
+  if (/warframestat\.us/i.test(url)) {
+    log.warn({ url }, 'arbitrationUrl points at warframestat.us — ignored');
+    return [];
+  }
+  const ttl = cfg.api.arbitrationCacheTtlMs ?? 600_000;
+  const cacheKey = `arb-ext:${url}`;
+  const cached = globalCache.get<Arbitration[]>(cacheKey);
+  if (cached !== undefined) return cached;
+
+  try {
+    const raw = await getJsonAbsolute<unknown>(url, ttl);
+    const mapped = normalizeArbitrationFeed(raw)
+      .map(mapExternalArbItem)
+      .filter((a) => a.node && a.node !== 'SolNode000');
+    mapped.sort((a, b) => arbStartMs(a) - arbStartMs(b));
+    globalCache.set(cacheKey, mapped, ttl);
+    return mapped;
+  } catch (err) {
+    log.warn({ err, url }, 'external arbitration feed failed');
+    return [];
+  }
+}
+
+/** Currently active arbitration from schedule (activation ≤ now < expiry). */
+export function pickCurrentArbitration(list: Arbitration[], now = Date.now()): Arbitration | undefined {
+  for (const a of list) {
+    const start = arbStartMs(a);
+    const end = arbEndMs(a);
+    if (!Number.isNaN(start) && !Number.isNaN(end) && start <= now && now < end) return a;
+    if (Number.isNaN(start) && !Number.isNaN(end) && now < end) return a;
+  }
+  return undefined;
+}
+
+/** Items with efficient-farm bounds (资源/经验加成). */
+export function filterEfficientArbitrations(list: Arbitration[]): Arbitration[] {
+  return (list || []).filter((a) => a.bounds && (a.bounds.resourceBonus != null || a.bounds.xpBonus != null));
+}
+
+/**
+ * Current arbitration: prefer DE/worldstate field; if stub/missing, use external feed.
+ * Soft-fails to SolNode000 stub (Chinese empty message via formatArbitration).
+ * Never calls api.warframestat.us for this.
+ */
 export async function fetchArbitration(): Promise<Arbitration> {
-  return fromWorldState('arbitration');
+  const cfg = loadConfig();
+  try {
+    const ws = await fetchWorldState();
+    const v = pickWorldStateField(ws, 'arbitration');
+    if (v && !isStubArbitration(v)) return v;
+  } catch (err) {
+    log.debug({ err }, 'worldstate arbitration unavailable');
+  }
+
+  // warframestat source may still expose /arbitration subpath — only when not de/mock
+  if (!cfg.api.mock && cfg.api.source === 'warframestat') {
+    try {
+      const v = await getJson<Arbitration>(WORLDSTATE_FIELD_PATHS.arbitration);
+      if (v && !isStubArbitration(v)) return v;
+    } catch (err) {
+      log.debug({ err }, 'warframestat arbitration subpath failed');
+    }
+  }
+
+  const schedule = await fetchArbitrationSchedule();
+  const current = pickCurrentArbitration(schedule);
+  if (current) return current;
+
+  return { node: 'SolNode000', type: 'Unknown' };
 }
 
 export async function fetchFissures(): Promise<Fissure[]> {

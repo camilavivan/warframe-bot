@@ -34,6 +34,14 @@ const ConfigSchema = z.object({
       mockFixturePath: z.string().default('./fixtures/worldstate-pc-zh.json'),
       /** How often mock fixture is re-read from disk (mtime always wins sooner) */
       mockReloadMs: z.number().default(300_000),
+      /**
+       * External kuva arbitration schedule (DE CDN / parser lacks live arb).
+       * Default CN-friendly JSON feed; empty string disables external fetch.
+       * Do NOT point at api.warframestat.us.
+       */
+      arbitrationUrl: z.string().default('https://wf.555590.xyz/api/arbys?days=30'),
+      /** Cache TTL for external arbitration feed (5–15 min recommended) */
+      arbitrationCacheTtlMs: z.number().default(600_000),
     })
     .default({}),
   push: z
@@ -79,6 +87,18 @@ const ConfigSchema = z.object({
       mode: z.enum(['websocket', 'webhook']).default('websocket'),
       webhookPort: z.number().default(9000),
       webhookPath: z.string().default('/qqbot/webhook'),
+      /** Proactive send rate limit (push / sendGroupMsg); passive reply untouched */
+      rateLimit: z
+        .object({
+          enabled: z.boolean().default(true),
+          /** Soft per-group proactive msgs / minute */
+          perGroupPerMin: z.number().default(15),
+          /** Soft global proactive msgs / minute */
+          globalPerMin: z.number().default(30),
+          maxQueuePerGroup: z.number().default(40),
+          rateLimitBackoffMs: z.number().default(3000),
+        })
+        .default({}),
     })
     .default({}),
 });
@@ -139,6 +159,9 @@ export function loadConfig(path?: string): AppConfig {
   }
   if (process.env.WARFRAME_DE_WORLDSTATE_URL) {
     cfg.api.deWorldStateUrl = process.env.WARFRAME_DE_WORLDSTATE_URL.trim();
+  }
+  if (process.env.WARFRAME_ARBITRATION_URL !== undefined) {
+    cfg.api.arbitrationUrl = process.env.WARFRAME_ARBITRATION_URL.trim();
   }
 
   // mock flag / source=mock both mean fixture mode

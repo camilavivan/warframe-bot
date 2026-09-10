@@ -3,6 +3,8 @@ import { loadConfig } from '../config.js';
 import {
   fetchAlerts,
   fetchArbitration,
+  fetchArbitrationSchedule,
+  filterEfficientArbitrations,
   fetchArchimedeas,
   fetchArchonHunt,
   fetchCalendar,
@@ -29,6 +31,8 @@ import {
   filterFissures,
   formatAlerts,
   formatArbitration,
+  formatArbitrationSchedule,
+  formatEfficientArbitrations,
   formatArchimedeas,
   formatArchonHunt,
   formatBounties,
@@ -101,6 +105,26 @@ export function registerAllCommands(): void {
     description: '当前仲裁',
     async handle(ctx) {
       await ctx.reply(formatArbitration(await fetchArbitration()));
+    },
+  });
+
+  registerCommand({
+    name: '今日仲裁',
+    aliases: ['仲裁日程', 'arbitrations', 'arby'],
+    description: '今日仲裁日程（外部 kuva 源）',
+    async handle(ctx) {
+      const schedule = await fetchArbitrationSchedule();
+      await ctx.reply(formatArbitrationSchedule(schedule));
+    },
+  });
+
+  registerCommand({
+    name: '高效仲裁',
+    aliases: ['高效', 'efficient', 'arbefficient'],
+    description: '带资源/经验加成的仲裁',
+    async handle(ctx) {
+      const schedule = await fetchArbitrationSchedule();
+      await ctx.reply(formatEfficientArbitrations(filterEfficientArbitrations(schedule)));
     },
   });
 

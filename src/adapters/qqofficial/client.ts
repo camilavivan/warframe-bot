@@ -9,6 +9,7 @@ import type { AppConfig } from '../../config.js';
 import { logger } from '../../core/logger.js';
 import { dispatch } from '../../commands/registry.js';
 import { replyImages, replyText, type ReplyPayload } from '../../commands/types.js';
+import { createQQProactiveRateLimiter } from './rate-limit.js';
 
 const log = logger.child({ module: 'qqofficial' });
 
@@ -117,13 +118,27 @@ export async function startQQOfficial(cfg: AppConfig['qqofficial']): Promise<QQO
     'QQ official bot started',
   );
 
+  const limiter = createQQProactiveRateLimiter(cfg.rateLimit);
+  log.info(
+    {
+      rateLimitEnabled: limiter.options.enabled,
+      perGroupPerMin: limiter.options.perGroupPerMin,
+      globalPerMin: limiter.options.globalPerMin,
+    },
+    'QQ proactive send rate limiter ready',
+  );
+
   return {
     sendGroupMsg: async (groupOpenid, message) => {
-      await bot.group(groupOpenid).send(message);
+      await limiter.schedule(`group:${groupOpenid}`, async () => {
+        await bot.group(groupOpenid).send(message);
+      });
       log.debug({ groupOpenid }, 'sent group msg');
     },
     sendPrivateMsg: async (userOpenid, message) => {
-      await bot.user(userOpenid).send(message);
+      await limiter.schedule(`user:${userOpenid}`, async () => {
+        await bot.user(userOpenid).send(message);
+      });
       log.debug({ userOpenid }, 'sent private msg');
     },
     close: async () => {

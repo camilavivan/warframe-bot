@@ -1,6 +1,10 @@
 import {
+  fetchArbitrationSchedule,
   fetchWorldState,
+  isStubArbitration,
   isVoidTraderActive,
+  pickCurrentArbitration,
+  type Fissure,
   type WorldState,
 } from '../core/warframestat.js';
 import {
@@ -26,6 +30,18 @@ import {
 } from './db.js';
 
 const log = logger.child({ module: 'poller' });
+
+/** In-memory fissure id snapshot for denoise (net-new only). */
+let prevFissureIds: Set<string> | null = null;
+
+/** Test helper — clear fissure denoise snapshot. */
+export function resetFissurePushSnapshotForTests(): void {
+  prevFissureIds = null;
+}
+
+function fissureId(f: Fissure): string | undefined {
+  return f.id || undefined;
+}
 
 export type SendFn = (
   platform: 'onebot' | 'kook' | 'qqofficial',
@@ -94,10 +110,18 @@ export async function pollFromWorldState(ws: WorldState, send: SendFn): Promise<
     log.warn({ err }, 'sortie format/push failed');
   }
 
-  // Arbitration
+  // Arbitration — prefer worldstate; fall back to external kuva feed when stub/missing
   try {
-    const arb = ws.arbitration;
-    if (arb?.node) {
+    let arb = ws.arbitration;
+    if (isStubArbitration(arb)) {
+      try {
+        arb = pickCurrentArbitration(await fetchArbitrationSchedule());
+      } catch (err) {
+        log.debug({ err }, 'external arbitration for push failed');
+        arb = undefined;
+      }
+    }
+    if (arb && !isStubArbitration(arb)) {
       const key = `arb:${arb.node}:${arb.type}:${arb.expiry ?? ''}`;
       await broadcast('arbitration', key, `📢 仲裁刷新\n${formatArbitration(arb)}`, send);
     }
@@ -105,18 +129,38 @@ export async function pollFromWorldState(ws: WorldState, send: SendFn): Promise<
     log.warn({ err }, 'arbitration format/push failed');
   }
 
-  // Fissures — push when a new hard/storm/normal set id appears (use first few ids hash)
+  // Fissures — denoise: only push when net-new ids appear (or full list on first run)
   try {
     const fissures = ws.fissures || [];
     const active = filterFissures(fissures);
+    const currentIds = new Set(
+      active.map(fissureId).filter((id): id is string => Boolean(id)),
+    );
     if (active.length) {
-      const key = `fis:${active
-        .map((f) => f.id)
-        .sort()
-        .join(',')
-        .slice(0, 200)}`;
-      await broadcast('fissures', key, `📢 裂缝更新\n${formatFissures(active)}`, send);
+      if (prevFissureIds === null) {
+        const key = `fis:init:${[...currentIds].sort().join(',').slice(0, 180)}`;
+        await broadcast('fissures', key, `📢 裂缝更新\n${formatFissures(active)}`, send);
+      } else {
+        const newcomers = active.filter((f) => {
+          const id = fissureId(f);
+          return id ? !prevFissureIds!.has(id) : false;
+        });
+        if (newcomers.length) {
+          const newIds = newcomers
+            .map(fissureId)
+            .filter((id): id is string => Boolean(id))
+            .sort();
+          const key = `fis:new:${newIds.join(',').slice(0, 180)}`;
+          await broadcast(
+            'fissures',
+            key,
+            `📢 新增裂缝\n${formatFissures(newcomers, '新增裂缝')}`,
+            send,
+          );
+        }
+      }
     }
+    prevFissureIds = currentIds;
   } catch (err) {
     log.warn({ err }, 'fissures format/push failed');
   }

@@ -10,7 +10,7 @@
     "dry-run": "tsx src/core/dry-run.ts",
     "dry-run:mock": "WARFRAMESTAT_MOCK=1 tsx src/core/dry-run.ts",
     "serve-mock-api": "node scripts/serve-mock-api.mjs",
-    "test": "tsx --test tests/formatters.test.ts tests/formatters-2026.test.ts tests/dedupe.test.ts tests/locale.test.ts tests/worldstate.test.ts tests/mock.test.ts tests/de-worldstate.test.ts tests/images.test.ts tests/push-topics.test.ts",
+    "test": "tsx --test tests/formatters.test.ts tests/formatters-2026.test.ts tests/dedupe.test.ts tests/locale.test.ts tests/worldstate.test.ts tests/mock.test.ts tests/de-worldstate.test.ts tests/images.test.ts tests/push-topics.test.ts tests/fissure-denoise.test.ts tests/arbitration-feed.test.ts tests/rate-limit.test.ts",
     "dev": "tsx src/index.ts",
     "fetch-lexicon": "node scripts/fetch-zh-lexicon.mjs"
   },

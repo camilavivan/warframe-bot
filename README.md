@@ -16,7 +16,8 @@
 | 命令 | 说明 |
 |------|------|
 | `菜单` | 帮助 |
-| `突击` / `仲裁` | 每日突击、仲裁 |
+| `突击` / `仲裁` / `今日仲裁` / `高效仲裁` | 每日突击、当前仲裁、日程与高效加成场 |
+| `资源` / `哪里刷` / `farm` | 常见资源刷取地点（**离线词典**，不走 drops API） |
 | `裂缝` / `钢铁裂缝` / `虚空风暴` | 虚空裂缝（含钢铁之路 / SP 虚空风暴） |
 | `入侵` / `警报` | 入侵与警报 |
 | `奸商` / `特惠` | Baro / Darvo |
@@ -38,7 +39,7 @@
 | 特殊事件 | `events` | 非日常限时活动（worldstate `events`，过滤已过期） |
 | 突击 | `sortie` | 每日突击 |
 | 仲裁 | `arbitration` | 仲裁刷新 |
-| 裂缝 | `fissures` | 虚空裂缝更新 |
+| 裂缝 | `fissures` | 虚空裂缝**新增**时推送（降噪，非整表每次刷新） |
 | 平原夜 / 希图斯夜 | `cetus-night` | 希图斯进入夜晚 |
 | 入侵 | `invasions` | 新入侵 |
 | 奸商 | `voidtrader` | Baro 动态 |
@@ -53,6 +54,13 @@
 
 - `api.cacheTtlMs` 默认 **60000**（60s）：DE CDN worldstate 与各命令 `fromWorldState` **共用**进程内 `globalCache`，避免重复拉网 / 重复解析。
 - 额外对格式化后的命令回复做短缓存（约 **20s**，键为命令名 + 参数），刷屏同一查询时跳过重复 format；`订阅` / `取消订阅` / `订阅列表` 不缓存。
+
+### 仲裁外部源 / 裂缝降噪 / QQ 主动限速
+
+- **仲裁**：DE CDN 无 kuva 仲裁。配置 `api.arbitrationUrl`（默认 `https://wf.555590.xyz/api/arbys?days=30`，国内可用），缓存 `api.arbitrationCacheTtlMs`（默认 10 分钟）。失败时中文空状态。**不会**请求 `api.warframestat.us` 拉仲裁。命令：`仲裁`（当前）、`今日仲裁` / `仲裁日程`、`高效仲裁`（带 bounds 加成）。
+- **裂缝推送降噪**：内存快照对比 id；仅当出现**净新增**裂缝时推送「新增裂缝」列表（首次轮询仍推全量）。订阅主题仍为 `fissures`。
+- **QQ 官方主动发送限速**：`qqofficial.rateLimit`（默认每群 ~15/min、全局 ~30/min，队列 + 429 退避）。仅约束 `sendGroupMsg` / 推送路径；被动 `event.reply` 不限速。
+- **资源刷取**：`资源` / `哪里刷` / `farm` 使用仓库内离线精简词典（氩结晶、氧化氖等），避免 CN VPS 访问 drops 被 Cloudflare 拦截。
 
 默认指令前缀：`wf ` 与 `/`（可在配置中修改）。
 
@@ -165,7 +173,7 @@ api:
 
 环境变量：`WARFRAMESTAT_SOURCE=de` · `WARFRAME_DE_WORLDSTATE_URL=...`
 
-> **说明**：旧地址 `content.warframe.com/dynamic/worldState.php` 已全局 404。自建 `ghcr.io/wfcd/warframe-status` 若仍拉旧 URL 会灌空/`WorldState Not Found`；核心推送/查询改用 `source: de` 后可停用 status 容器（或保留不用）。`wm` / `翻译` 仍走 Warframe.market / items（与 worldstate 来源无关）。仲裁依赖外部 kuva 源，DE-only 模式下可能暂缺。
+> **说明**：旧地址 `content.warframe.com/dynamic/worldState.php` 已全局 404。自建 `ghcr.io/wfcd/warframe-status` 若仍拉旧 URL 会灌空/`WorldState Not Found`；核心推送/查询改用 `source: de` 后可停用 status 容器（或保留不用）。`wm` / `翻译` 仍走 Warframe.market / items（与 worldstate 来源无关）。仲裁在 DE-only 下走 `api.arbitrationUrl` 外部 kuva 日程（见上文）。
 >
 > **DE 解析**：`warframe-worldstate-parser` 默认会向 `api.warframestat.us/drops/search` 拉赏金掉落补全；国内常被 Cloudflare 返回 HTML，导致 JSON 解析失败并刷屏。bot 在 DE 解析期间会短接该 drops 请求并静默 parser 的 debug（kuva/outpost 缺数据同类），不影响 `api.warframe.com` CDN 拉取。赏金 `rewardPool` 可能为占位文案，核心推送不依赖掉落补全。
 
@@ -417,7 +425,7 @@ docker compose logs -f warframe-bot
 | 健康检查失败 / OneBot 关闭 | 确认 `health.port` 暴露；`curl localhost:6700/health` |
 | Docker 访问不到宿主机 OneBot | `apiBase` 用 `http://host.docker.internal:5700`，并保留 `extra_hosts` |
 | QQ 官方连不上 / 鉴权失败 | 核对 AppID/Secret、IP 白名单、沙箱开关；群聊须 **@机器人**；先 `sandbox: true` |
-| QQ 官方推送失败 | 主动消息受平台限额/权限约束；优先依赖用户 @ 后的被动回复；检查开放平台消息权限 |
+| QQ 官方推送失败 | 主动消息受平台限额/权限约束；bot 侧有 `qqofficial.rateLimit` 令牌桶；优先依赖用户 @ 后的被动回复；检查开放平台消息权限 |
 | 奸商显示异常 | 新版 API 可能省略 `active` 字段，机器人会按 activation/expiry 推算 |
 | 腾讯云等机房 IP 访问 `api.warframestat.us` 被 Cloudflare **HTTP 403** / status 灌空 | **推荐**：`api.source: de` + `mock: false`（直连 DE CDN，无需 status）。旧 content.warframe.com 已 404。仍可用自建 status（`source: warframestat`）或 WARP/代理 compose。**短期自测**：`WARFRAMESTAT_MOCK=1`。亦可 `HTTPS_PROXY` / `api.proxyUrl` |
 | `ghcr.io/wfcd/warframe-status` 拉取失败 | 配镜像加速/代理；或 clone WFCD/warframe-status 后改 compose `build.context`（勿 vendoring 进本仓库） |
@@ -436,7 +444,8 @@ src/
   push/                 # 轮询、去重、订阅（SQLite，含 chat_type）
   adapters/onebot/      # Fastify HTTP 接收 + 群/私聊发送
   adapters/kook/        # WebSocket 网关 + 频道/私信发送
-  adapters/qqofficial/  # QQ 开放平台 AppID/Secret（群@ + C2C）
+  adapters/qqofficial/  # QQ 开放平台 AppID/Secret（群@ + C2C，主动发送限速）
+  # core/resources.ts   # 离线常见资源刷取词典
 scripts/
   fetch-zh-lexicon.mjs  # 拉取 solNodes 生成 locale-zh.generated.ts
   serve-mock-api.mjs    # 假 warframestat HTTP（:3099）供集成测试

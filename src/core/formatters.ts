@@ -50,11 +50,34 @@ export function formatSortie(s: Sortie | null | undefined): string {
   return lines.join('\n');
 }
 
+function formatArbBounds(a: Arbitration): string | null {
+  const b = a.bounds;
+  if (!b) return null;
+  const parts: string[] = [];
+  if (b.resourceBonus != null) parts.push(`资源+${Math.round(b.resourceBonus * 100)}%`);
+  if (b.xpBonus != null) parts.push(`经验+${Math.round(b.xpBonus * 100)}%`);
+  if (b.weaponXpBonusFor && b.weaponXpBonusVal != null) {
+    parts.push(`${b.weaponXpBonusFor}武器经验+${Math.round(b.weaponXpBonusVal * 100)}%`);
+  }
+  return parts.length ? `加成：${parts.join(' · ')}` : null;
+}
+
+function formatArbLine(a: Arbitration, withBounds = true): string {
+  const flags = [a.archwing ? 'Archwing' : '', a.sharkwing ? 'Sharkwing' : ''].filter(Boolean).join('/');
+  const when = a.activation
+    ? `${new Date(a.activation).toLocaleString('zh-CN', { timeZone: 'Asia/Hong_Kong', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}`
+    : '';
+  const core = `· ${zhNode(a.node)} | ${zh(a.type) || a.type || '?'} | ${zh(a.enemy) || a.enemy || '?'}${flags ? ` [${flags}]` : ''}`;
+  const eta = `剩余 ${formatEta(a.eta, a.expiry)}`;
+  const bound = withBounds ? formatArbBounds(a) : null;
+  return [when ? `${core} @ ${when}` : core, eta, bound].filter(Boolean).join(' · ');
+}
+
 export function formatArbitration(a: Arbitration | null | undefined): string {
-  if (!a || !a.node) return '当前无仲裁（DE 源暂无，需 kuva 数据源）。';
-  // warframestat often returns placeholder when arbitration is unavailable
+  if (!a || !a.node) return '当前无仲裁（外部 kuva 源暂不可用）。';
+  // warframestat / DE stub when arbitration is unavailable
   if (a.node === 'SolNode000' || a.type === 'Unknown') {
-    return '当前无仲裁（DE 源暂无有效节点）。';
+    return '当前无仲裁（外部 kuva 源暂无有效节点）。';
   }
   const flags = [a.archwing ? 'Archwing' : '', a.sharkwing ? 'Sharkwing' : ''].filter(Boolean).join('/');
   return [
@@ -62,10 +85,54 @@ export function formatArbitration(a: Arbitration | null | undefined): string {
     `节点：${zhNode(a.node)}`,
     `任务：${zh(a.type) || '?'} · 敌人：${zh(a.enemy) || '?'}`,
     flags ? `特殊：${flags}` : null,
+    formatArbBounds(a),
     `剩余：${formatEta(a.eta, a.expiry)}`,
   ]
     .filter(Boolean)
     .join('\n');
+}
+
+/** Today's (Asia/Hong_Kong) arbitration schedule from external feed. */
+export function formatArbitrationSchedule(list: Arbitration[], title = '今日仲裁'): string {
+  const items = list || [];
+  if (!items.length) return `暂无${title}日程（外部源无数据或未配置）。`;
+  const fmt = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Hong_Kong',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  });
+  const today = fmt.format(new Date());
+  const todays = items.filter((a) => {
+    if (!a.activation && !a.expiry) return false;
+    const day = fmt.format(new Date(a.activation || a.expiry || ''));
+    return day === today;
+  });
+  const shown = (todays.length ? todays : items.slice(0, 12)).slice(0, 16);
+  const lines = [
+    `【${title}】共 ${shown.length} 场${todays.length ? '' : '（今日无条目，展示近期）'}`,
+  ];
+  for (const a of shown) lines.push(formatArbLine(a, true));
+  if ((todays.length || items.length) > shown.length) {
+    lines.push(`…另有更多，可查「高效仲裁」`);
+  }
+  return lines.join('\n');
+}
+
+export function formatEfficientArbitrations(list: Arbitration[]): string {
+  const items = (list || []).filter(
+    (a) => a.bounds && (a.bounds.resourceBonus != null || a.bounds.xpBonus != null),
+  );
+  if (!items.length) return '近期暂无标注高效加成的仲裁（或外部源未提供 bounds）。';
+  const upcoming = items.filter((a) => {
+    if (!a.expiry) return true;
+    const t = new Date(a.expiry).getTime();
+    return Number.isNaN(t) || t > Date.now();
+  }).slice(0, 12);
+  if (!upcoming.length) return '近期暂无未结束的高效仲裁。';
+  const lines = [`【高效仲裁】共 ${upcoming.length} 场（含资源/经验加成）`];
+  for (const a of upcoming) lines.push(formatArbLine(a, true));
+  return lines.join('\n');
 }
 
 export type FissureFilter = {
@@ -282,8 +349,10 @@ export function formatMenu(prefix: string): string {
     `前缀：\`${prefix}\` 或 \`/\``,
     '',
     '世界状态：',
-    '  突击 / 仲裁 / 裂缝 / 钢铁裂缝 / 虚空风暴',
+    '  突击 / 仲裁 / 今日仲裁 / 高效仲裁',
+    '  裂缝 / 钢铁裂缝 / 虚空风暴',
     '  入侵 / 警报 / 奸商 / 特惠 / 活动 / 新闻',
+    '  资源 「名称」 / 哪里刷 「名称」 — 常见资源掉落地',
     '  电波 / 舰队 / 猎杀',
     '  日历 / 1999 / hex日历 — 1999 Hex 日历',
     '  深层 / deep / archimedea — 深层/时空研习',

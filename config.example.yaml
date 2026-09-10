@@ -31,6 +31,11 @@ api:
   # 环境变量 WARFRAMESTAT_SOURCE=de|warframestat|mock
   mock: false
   mockFixturePath: ./fixtures/worldstate-pc-zh.json  # relative to cwd
+  # 外部 kuva 仲裁日程（DE 源无仲裁时使用；勿指向 api.warframestat.us）
+  # 默认国内可访问；也可用环境变量 WARFRAME_ARBITRATION_URL
+  arbitrationUrl: "https://wf.555590.xyz/api/arbys?days=30"
+  arbitrationCacheTtlMs: 600000   # 10 分钟缓存
+  # 备选（历史快照，通常不是当前仲裁）：https://10o.io/arbitrations.json
 
 # 推送
 push:
@@ -76,4 +81,11 @@ qqofficial:
   # mode: websocket       # websocket（默认）| webhook
   # webhookPort: 9000
   # webhookPath: /qqbot/webhook
+  # 主动推送限速（被动 event.reply 不受影响）
+  rateLimit:
+    enabled: true
+    perGroupPerMin: 15    # 每群约 15–18/min 为宜
+    globalPerMin: 30      # 全 bot 主动发送上限
+    maxQueuePerGroup: 40
+    rateLimitBackoffMs: 3000
 
