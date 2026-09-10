@@ -349,3 +349,10 @@ export WARFRAME_STATUS_PROXY=http://host.docker.internal:7890
 docker-compose -f docker-compose.with-status-proxy.yml up -d --build
 curl -sS 'http://127.0.0.1:3001/pc?language=zh' | head -c 200
 ```
+
+
+### status 返回 `WorldState Not Found` / Drops 灌入 HTML
+
+1. 确认 bot `api.baseUrl` 是 `http://warframe-status:3001`（不要仍是 `https://api.warframestat.us`）。
+2. 清空 `ws-caches` 后设 `USE_WORLDSTATE=true`、`FEATURES=worldstate`、`BUILD=build` 重建 status。
+3. 若容器内访问 `content.warframe.com/dynamic/worldState.php` 也失败，改用 `docker-compose.with-status-proxy.yml` + 代理。
