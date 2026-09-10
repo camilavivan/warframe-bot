@@ -5,7 +5,7 @@
 1. **QQ** — OneBot v11（HTTP 上报接收 + HTTP API 发送，兼容 NapCat / go-cqhttp / Lagrange）
 2. **KOOK** — 官方 Bot WebSocket 网关
 
-数据来源：[api.warframestat.us](https://api.warframestat.us)（`language=zh`）、[Warframe.market](https://warframe.market)。
+数据来源：[api.warframestat.us](https://api.warframestat.us) 或自建 [WFCD/warframe-status](https://github.com/WFCD/warframe-status)（`language=zh`）、[Warframe.market](https://warframe.market)。国内 CF 403 见「自建 warframe-status」。
 
 > 功能参考（**仅作需求对照，本仓库为独立原创实现，未复制其源码**）：
 > [WFBot](https://github.com/TRKS-Team/WFBot)、[AaTMbot](https://github.com/AaTM-M/AaTMbot)、[warframe-world-state](https://github.com/WFCD/warframe-worldstate-data)、[ghcruise/WarframeBot](https://github.com/ghcruise/WarframeBot)。
@@ -103,6 +103,96 @@ compose 已配置 `extra_hosts: host.docker.internal:host-gateway`。
 - `npm ci` + `package-lock.json`
 - 非 root 用户 `node`
 - 入口脚本：缺少 `config.yaml` 时从 `config.example.yaml` 复制并打印警告
+
+
+## 自建 warframe-status
+
+国内机房访问官方 `https://api.warframestat.us` 常被 **Cloudflare HTTP 403** 拦截。可在同一 Docker Compose 中自建 [WFCD/warframe-status](https://github.com/WFCD/warframe-status)，让机器人走内网 `http://warframe-status:3001`，**不再经过 Cloudflare**。
+
+> **注意**：status 容器仍需出网拉取 Warframe **内容服** worldstate。若机房 IP 被内容服地理封锁（DE geo-block），请改用下方 **WARP 侧车** 方案，而不是只换 baseUrl。
+
+### 配置
+
+`config.yaml`：
+
+```yaml
+api:
+  baseUrl: "http://warframe-status:3001"  # compose 同网络
+  # baseUrl: "http://host.docker.internal:3001"  # status 用 WARP 侧车时
+  mock: false
+```
+
+### 常规（无 WARP）
+
+默认 `docker-compose.yml` / `docker-compose.with-status.yml` 已包含 `warframe-status` 服务，bot `depends_on` 它，同网络用服务名互通。
+
+```bash
+cd /opt/warframe-bot   # 或你的部署目录
+git pull
+# 编辑 config.yaml：api.baseUrl + mock:false（见上）
+mkdir -p ws-caches data
+docker-compose up -d --build
+# 或显式：docker compose -f docker-compose.with-status.yml up -d --build
+
+curl -sS 'http://127.0.0.1:3001/pc?language=zh' | head
+./scripts/check-status.sh
+docker-compose logs -f warframe-status warframe-bot
+```
+
+### WARP 变体（内容服地理封锁）
+
+当 status 能起来但对内容服超时/空数据时，使用端到端文件 `docker-compose.with-status-warp.yml`：
+
+- `warp` 侧车发布 `3001:3001`
+- `warframe-status` 使用 `network_mode: service:warp`（出网走 WARP）
+- `warframe-bot` 仍在默认网络，经 `host.docker.internal:3001` 访问（**不能**再写 `http://warframe-status:3001`，因 status 已并入 warp 网络命名空间）
+
+```bash
+cd /opt/warframe-bot
+git pull
+# config.yaml:
+#   api:
+#     baseUrl: "http://host.docker.internal:3001"
+#     mock: false
+mkdir -p ws-caches data
+docker compose -f docker-compose.with-status-warp.yml up -d --build
+
+# WARP 首次注册约 30s+
+docker compose -f docker-compose.with-status-warp.yml logs -f warp
+curl -sS 'http://127.0.0.1:3001/heartbeat'
+curl -sS 'http://127.0.0.1:3001/pc?language=zh' | head
+./scripts/check-status.sh
+docker compose -f docker-compose.with-status-warp.yml logs -f warframe-status warframe-bot
+```
+
+可选 WARP+：在 warp 服务环境变量中设置 `WARP_LICENSE_KEY`。官方示例见 [docker-compose.warp.example.yml](https://github.com/WFCD/warframe-status/blob/main/docker-compose.warp.example.yml)。
+
+### 国内拉不到 `ghcr.io/wfcd/warframe-status`
+
+不要把整个 warframe-status 仓库 vendoring 进本项目。任选其一：
+
+1. 配置 Docker 镜像加速 / 代理后重试 `docker pull ghcr.io/wfcd/warframe-status:latest`
+2. 另目录 clone 上游后本地构建，再在 compose 里改：
+
+```yaml
+warframe-status:
+  # image: ghcr.io/wfcd/warframe-status:latest
+  build:
+    context: ../warframe-status   # 你 clone 的路径
+    dockerfile: Dockerfile
+```
+
+3. 使用可拉取的第三方镜像源/转发（自行评估可信度）
+
+缓存目录：`./ws-caches` → 容器 `/app/caches`（已在 `.gitignore`）。
+
+### 探活脚本
+
+```bash
+./scripts/check-status.sh                 # 默认 http://127.0.0.1:3001
+./scripts/check-status.sh http://127.0.0.1:3001
+```
+
 
 ## 本地开发
 
@@ -209,7 +299,10 @@ kook:
 | 健康检查失败 / OneBot 关闭 | 确认 `health.port` 暴露；`curl localhost:6700/health` |
 | Docker 访问不到宿主机 OneBot | `apiBase` 用 `http://host.docker.internal:5700`，并保留 `extra_hosts` |
 | 奸商显示异常 | 新版 API 可能省略 `active` 字段，机器人会按 activation/expiry 推算 |
-| 腾讯云等机房 IP 访问 `api.warframestat.us` 被 Cloudflare **HTTP 403** | **短期自测**：`WARFRAMESTAT_MOCK=1` 或 `api.mock: true`（见上文「模拟测试」）。**长期**：设置出网代理 `HTTPS_PROXY` / `WARFRAMESTAT_PROXY` / `api.proxyUrl`；或自建 [WFCD/warframe-status](https://github.com/WFCD/warframe-status) 把 `api.baseUrl` 指过去，必要时用 `api.fallbackBaseUrls`；也可用 `npm run serve-mock-api` 把 `baseUrl` 指到宿主机 `:3099`。新版本每轮推送只请求一次完整 worldstate（`/pc?language=zh`），降低请求频次 |
+| 腾讯云等机房 IP 访问 `api.warframestat.us` 被 Cloudflare **HTTP 403** | **推荐**：自建 warframe-status（见「自建 warframe-status」），`api.baseUrl: http://warframe-status:3001` 且 `mock: false`。内容服也被墙时用 `docker-compose.with-status-warp.yml` + `baseUrl: http://host.docker.internal:3001`。**短期自测**：`WARFRAMESTAT_MOCK=1` / `api.mock: true`。亦可 `HTTPS_PROXY` / `api.proxyUrl` 或 `npm run serve-mock-api` |
+| `ghcr.io/wfcd/warframe-status` 拉取失败 | 配镜像加速/代理；或 clone WFCD/warframe-status 后改 compose `build.context`（勿 vendoring 进本仓库） |
+| status 容器 healthy 但 `/pc` 空/超时 | 内容服 geo-block → 换 WARP compose；`docker compose logs warframe-status` / `warp` |
+| bot 连不上 status（WARP 方案） | WARP 下勿用服务名；`api.baseUrl` 须为 `http://host.docker.internal:3001`，并保留 bot 的 `extra_hosts` |
 
 ## 项目结构
 
@@ -226,8 +319,12 @@ src/
 scripts/
   fetch-zh-lexicon.mjs  # 拉取 solNodes 生成 locale-zh.generated.ts
   serve-mock-api.mjs    # 假 warframestat HTTP（:3099）供集成测试
+  check-status.sh       # 探测自建 warframe-status（/heartbeat + /pc）
 fixtures/
   worldstate-pc-zh.json # 离线模拟 worldstate（api.mock / WARFRAMESTAT_MOCK）
+docker-compose.yml                 # bot + warframe-status（常规）
+docker-compose.with-status.yml     # 同上，文档显式命名
+docker-compose.with-status-warp.yml # bot + WARP 侧车 + status（中国 geo-block）
 docker-entrypoint.sh    # 缺省 config 警告 / 复制示例
 ```
 

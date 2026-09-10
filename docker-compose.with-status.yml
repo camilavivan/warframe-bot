@@ -1,0 +1,65 @@
+# 常规自建 status（无 WARP）：bot 与 warframe-status 同 compose 网络，按服务名互通。
+# 用法（VPS 目录常为 /opt/warframe-bot）：
+#   mkdir -p ws-caches data
+#   # config.yaml:
+#   #   api:
+#   #     baseUrl: "http://warframe-status:3001"
+#   #     mock: false
+#   docker compose -f docker-compose.with-status.yml up -d --build
+#   curl -sS 'http://127.0.0.1:3001/pc?language=zh' | head
+#
+# 与根目录 docker-compose.yml 等价（便于文档显式命名）。
+# 若内容服对机房 IP 地理封锁，改用 docker-compose.with-status-warp.yml。
+
+services:
+  warframe-status:
+    image: ghcr.io/wfcd/warframe-status:latest
+    container_name: warframe-status
+    restart: unless-stopped
+    ports:
+      - "3001:3001"
+    volumes:
+      - ./ws-caches:/app/caches
+    environment:
+      - LOG_LEVEL=error
+      - HOSTNAME=0.0.0.0
+      - PORT=3001
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3001/heartbeat').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 90s
+
+  warframe-bot:
+    build: .
+    image: warframe-bot:latest
+    container_name: warframe-bot
+    restart: unless-stopped
+    depends_on:
+      warframe-status:
+        condition: service_started
+    ports:
+      - "6700:6700"
+    volumes:
+      - ./config.yaml:/app/config.yaml:ro
+      - ./data:/app/data
+    # env_file:
+    #   - .env
+    environment:
+      - LOG_LEVEL=info
+      # - WARFRAMESTAT_MOCK=1
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:6700/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s

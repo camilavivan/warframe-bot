@@ -6,3 +6,4 @@ data/*.db-*
 config.yaml
 *.log
 .DS_Store
+ws-caches/

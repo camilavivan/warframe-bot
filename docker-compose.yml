@@ -1,9 +1,45 @@
 services:
+  # 自建 WFCD warframe-status（绕过国内对 api.warframestat.us 的 Cloudflare 403）
+  # bot 的 config.yaml 必须设：
+  #   api:
+  #     baseUrl: "http://warframe-status:3001"
+  #     mock: false
+  # 若 DE 内容服对机房 IP 地理封锁，改用：
+  #   docker compose -f docker-compose.with-status-warp.yml up -d --build
+  warframe-status:
+    image: ghcr.io/wfcd/warframe-status:latest
+    container_name: warframe-status
+    restart: unless-stopped
+    ports:
+      - "3001:3001" # 可选：宿主机 curl 调试
+    volumes:
+      - ./ws-caches:/app/caches
+    environment:
+      - LOG_LEVEL=error
+      - HOSTNAME=0.0.0.0
+      - PORT=3001
+    # 镜像为 alpine node，无 curl；用内置 node fetch 探活（官方文档用 /heartbeat）
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3001/heartbeat').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 90s
+
   warframe-bot:
     build: .
     image: warframe-bot:latest
     container_name: warframe-bot
     restart: unless-stopped
+    depends_on:
+      warframe-status:
+        condition: service_started
     ports:
       - "6700:6700"
     # 不要加 user:；入口以 root 启动后 chown ./data 再降权为 node

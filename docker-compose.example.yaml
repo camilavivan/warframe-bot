@@ -1,3 +1,4 @@
+# 另见 docker-compose.yml（含自建 warframe-status）与 docker-compose.with-status-warp.yml（WARP）。
 # 完整示例：warframe-bot + 注释掉的 NapCat 同网部署
 # 用法：cp docker-compose.example.yaml docker-compose.yml 后按需编辑
 
