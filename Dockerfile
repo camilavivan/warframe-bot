@@ -1,9 +1,11 @@
-# syntax=docker/dockerfile:1
 # Multi-stage production image for warframe-bot
 # Build: docker build -t warframe-bot .
 # Health: GET http://127.0.0.1:6700/health (always available; see config.health)
 
-FROM node:22-bookworm-slim AS build
+# 国内若拉不动 Docker Hub，构建时指定镜像，例如：
+#   docker compose build --build-arg NODE_IMAGE=docker.m.daocloud.io/library/node:22-bookworm-slim
+ARG NODE_IMAGE=node:22-bookworm-slim
+FROM ${NODE_IMAGE} AS build
 WORKDIR /app
 
 # Native build tools for better-sqlite3 (only in build stage)
@@ -20,7 +22,8 @@ RUN npm run build \
   && npm prune --omit=dev
 
 # --- runtime ---
-FROM node:22-bookworm-slim AS runtime
+ARG NODE_IMAGE=node:22-bookworm-slim
+FROM ${NODE_IMAGE} AS runtime
 WORKDIR /app
 
 # Matching glibc/libstdc++ for better-sqlite3 native binding
