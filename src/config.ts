@@ -10,6 +10,15 @@ const ConfigSchema = z.object({
   logLevel: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),
   api: z
     .object({
+      /**
+       * Worldstate source:
+       * - de: fetch DE CDN + warframe-worldstate-parser (recommended for CN VPS)
+       * - warframestat: api.warframestat.us or self-hosted warframe-status
+       * - mock: local fixture (same as mock:true)
+       */
+      source: z.enum(['de', 'warframestat', 'mock']).default('de'),
+      /** DE raw worldState.php URL (used when source=de) */
+      deWorldStateUrl: z.string().default('https://api.warframe.com/cdn/worldState.php'),
       baseUrl: z.string().default('https://api.warframestat.us'),
       platform: z.string().default('pc'),
       language: z.string().default('zh'),
@@ -19,7 +28,7 @@ const ConfigSchema = z.object({
       fallbackBaseUrls: z.array(z.string()).default([]),
       /** Optional explicit proxy; prefer HTTPS_PROXY / WARFRAMESTAT_PROXY env */
       proxyUrl: z.string().optional(),
-      /** Offline fixture mode — no api.warframestat.us (Cloudflare 403 safe) */
+      /** Offline fixture mode — no outbound worldstate fetch */
       mock: z.boolean().default(false),
       /** Path to worldstate JSON; relative to process cwd unless absolute */
       mockFixturePath: z.string().default('./fixtures/worldstate-pc-zh.json'),
@@ -103,6 +112,25 @@ export function loadConfig(path?: string): AppConfig {
   }
   if (process.env.WARFRAMESTAT_MOCK_FIXTURE) {
     cfg.api.mockFixturePath = process.env.WARFRAMESTAT_MOCK_FIXTURE;
+  }
+
+  const sourceEnv = process.env.WARFRAMESTAT_SOURCE;
+  if (sourceEnv !== undefined) {
+    const s = sourceEnv.trim().toLowerCase();
+    if (s === 'de' || s === 'warframestat' || s === 'mock') {
+      cfg.api.source = s;
+    }
+  }
+  if (process.env.WARFRAME_DE_WORLDSTATE_URL) {
+    cfg.api.deWorldStateUrl = process.env.WARFRAME_DE_WORLDSTATE_URL.trim();
+  }
+
+  // mock flag / source=mock both mean fixture mode
+  if (cfg.api.source === 'mock') {
+    cfg.api.mock = true;
+  }
+  if (cfg.api.mock) {
+    cfg.api.source = 'mock';
   }
 
   cached = cfg;

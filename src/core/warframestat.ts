@@ -461,7 +461,8 @@ function resolveProxyUri(): string | undefined {
   );
 }
 
-function getDispatcher(): Dispatcher | undefined {
+/** Shared with DE CDN client — HTTP(S) proxy via undici ProxyAgent. */
+export function getApiDispatcher(): Dispatcher | undefined {
   const uri = resolveProxyUri();
   if (!uri) return undefined;
   if (!proxyAgent || proxyAgentUri !== uri) {
@@ -471,6 +472,10 @@ function getDispatcher(): Dispatcher | undefined {
     log.info({ proxy: uri.replace(/\/\/[^@]+@/, '//***@') }, 'using HTTP proxy');
   }
   return proxyAgent;
+}
+
+function getDispatcher(): Dispatcher | undefined {
+  return getApiDispatcher();
 }
 
 function apiUrlForBase(baseUrl: string, path: string): string {
@@ -486,13 +491,18 @@ function apiUrl(path: string): string {
   return apiUrlForBase(loadConfig().api.baseUrl, path);
 }
 
-function requestHeaders(): Record<string, string> {
+/** Shared request headers (UA + Accept-Language). */
+export function getApiRequestHeaders(): Record<string, string> {
   const cfg = loadConfig();
   return {
     Accept: 'application/json',
     'Accept-Language': cfg.api.language,
     'User-Agent': cfg.api.userAgent,
   };
+}
+
+function requestHeaders(): Record<string, string> {
+  return getApiRequestHeaders();
 }
 
 function sleep(ms: number): Promise<void> {
@@ -600,6 +610,7 @@ async function getJson<T>(pathOrUrl: string, ttlMs?: number, absolute = false): 
  */
 async function fromWorldState<K extends WorldStateField>(field: K): Promise<NonNullable<WorldState[K]>> {
   const path = WORLDSTATE_FIELD_PATHS[field];
+  const cfg = loadConfig();
   try {
     const ws = await fetchWorldState();
     const v = pickWorldStateField(ws, field);
@@ -608,6 +619,10 @@ async function fromWorldState<K extends WorldStateField>(field: K): Promise<NonN
   } catch (err) {
     log.debug({ err, field }, 'worldstate unavailable, using subpath');
   }
+  // DE source: do not hit Cloudflare warframestat (CN 403); surface missing field
+  if (!cfg.api.mock && cfg.api.source === 'de') {
+    throw new Error(`DE worldstate missing field: ${field}`);
+  }
   return getJson(path);
 }
 
@@ -615,6 +630,10 @@ export async function fetchWorldState(): Promise<WorldState> {
   const cfg = loadConfig();
   if (cfg.api.mock) {
     return loadMockWorldState();
+  }
+  if (cfg.api.source === 'de') {
+    const { fetchDeWorldState } = await import('./de-worldstate.js');
+    return fetchDeWorldState();
   }
   return getJson<WorldState>('');
 }

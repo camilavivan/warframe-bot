@@ -7,22 +7,28 @@ prefix:
 # 日志级别: fatal | error | warn | info | debug | trace
 logLevel: info
 
-# Warframestat API
-# 国内 VPS 访问 api.warframestat.us 常被 Cloudflare 403 → 自建 warframe-status（见 README）
+# 世界状态 / API
+# - 腾讯云等国内 VPS 推荐 source: de（直连 DE CDN，无需 warframe-status）
+# - 旧 content.warframe.com/dynamic/worldState.php 已全局 404，勿再用
+# - api.warframestat.us 在国内常被 Cloudflare 403；自建 status 可选但非必需
 api:
-  # 官方（国外/可直连时）：
+  # source: de | warframestat | mock
+  source: de
+  deWorldStateUrl: "https://api.warframe.com/cdn/worldState.php"
+  # 仅 source=warframestat 时使用（官方或自建）：
   # baseUrl: "https://api.warframestat.us"
-  baseUrl: "http://warframe-status:3001"  # compose 同网络
+  # baseUrl: "http://warframe-status:3001"  # compose 同网络（可选）
   # baseUrl: "http://host.docker.internal:3001"  # status 用 WARP 侧车时
+  baseUrl: "https://api.warframestat.us"
   fallbackBaseUrls: []   # e.g. ["https://api.warframestat.us"]
-  # proxy via env HTTPS_PROXY preferred
+  # proxy via env HTTPS_PROXY preferred（DE / warframestat 共用）
   # proxyUrl: "http://127.0.0.1:7890"
   # userAgent: "warframe-bot/1.1 (+https://github.com/camilavivan/warframe-bot)"
   platform: "pc"          # pc | ps4 | xb1 | swi
   language: "zh"
   cacheTtlMs: 30000       # 世界状态缓存 TTL
-  # 模拟模式：不访问外网 API（本地/容器自测）；自建 status 后务必 mock: false
-  # 也可用环境变量 WARFRAMESTAT_MOCK=1 / WARFRAMESTAT_MOCK_FIXTURE=/path/to.json
+  # 模拟模式：不访问外网 API；也可用 WARFRAMESTAT_MOCK=1
+  # 环境变量 WARFRAMESTAT_SOURCE=de|warframestat|mock
   mock: false
   mockFixturePath: ./fixtures/worldstate-pc-zh.json  # relative to cwd
 

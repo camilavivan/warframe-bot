@@ -1,7 +1,7 @@
 {
   "name": "warframe-bot",
   "version": "1.1.0",
-  "description": "Warframe \u4fe1\u606f\u67e5\u8be2\u4e0e\u4e16\u754c\u72b6\u6001\u63a8\u9001\u673a\u5668\u4eba\uff08QQ/OneBot + KOOK\uff09",
+  "description": "Warframe 信息查询与世界状态推送机器人（QQ/OneBot + KOOK）",
   "type": "module",
   "main": "dist/index.js",
   "scripts": {
@@ -10,7 +10,7 @@
     "dry-run": "tsx src/core/dry-run.ts",
     "dry-run:mock": "WARFRAMESTAT_MOCK=1 tsx src/core/dry-run.ts",
     "serve-mock-api": "node scripts/serve-mock-api.mjs",
-    "test": "tsx --test tests/formatters.test.ts tests/formatters-2026.test.ts tests/dedupe.test.ts tests/locale.test.ts tests/worldstate.test.ts tests/mock.test.ts",
+    "test": "tsx --test tests/formatters.test.ts tests/formatters-2026.test.ts tests/dedupe.test.ts tests/locale.test.ts tests/worldstate.test.ts tests/mock.test.ts tests/de-worldstate.test.ts",
     "dev": "tsx src/index.ts",
     "fetch-lexicon": "node scripts/fetch-zh-lexicon.mjs"
   },
@@ -29,7 +29,9 @@
     "better-sqlite3": "^11.7.0",
     "fastify": "^5.2.1",
     "pino": "^9.6.0",
+    "reflect-metadata": "^0.2.2",
     "undici": "^7.3.0",
+    "warframe-worldstate-parser": "^5.5.3",
     "ws": "^8.18.0",
     "yaml": "^2.7.0",
     "zod": "^3.24.1"

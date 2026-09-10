@@ -33,8 +33,15 @@ import {
 } from './formatters.js';
 
 async function main(): Promise<void> {
-  loadConfig();
-  console.log('=== Warframe Bot Dry-Run（实时 API）===\n');
+  const cfg = loadConfig();
+  const src = cfg.api.mock ? 'mock' : cfg.api.source;
+  const hint =
+    src === 'de'
+      ? `DE CDN (${cfg.api.deWorldStateUrl})`
+      : src === 'mock'
+        ? 'mock fixture'
+        : `warframestat (${cfg.api.baseUrl})`;
+  console.log(`=== Warframe Bot Dry-Run（source=${src} · ${hint}）===\n`);
 
   const sortie = await fetchSortie();
   console.log(formatSortie(sortie));
