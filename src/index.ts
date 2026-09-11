@@ -7,6 +7,7 @@ import { startOneBot, type OneBotAdapter } from './adapters/onebot/server.js';
 import { startKook, type KookAdapter } from './adapters/kook/client.js';
 import { startQQOfficial, type QQOfficialAdapter } from './adapters/qqofficial/client.js';
 import { startHealthServer, type HealthServer } from './health.js';
+import { isCosEnabled, syncBundledThemeAssets } from './core/cos.js';
 
 async function main(): Promise<void> {
   const cfg = loadConfig();
@@ -37,6 +38,12 @@ async function main(): Promise<void> {
     qqofficial = await startQQOfficial(cfg.qqofficial);
   } else {
     logger.info('QQ official adapter disabled');
+  }
+
+  if (isCosEnabled()) {
+    void syncBundledThemeAssets().catch((err) => {
+      logger.warn({ err }, 'syncBundledThemeAssets failed');
+    });
   }
 
   const send = async (

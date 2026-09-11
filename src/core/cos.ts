@@ -6,7 +6,7 @@
  * Prefer bundled assets/img/* → putObject (CN VPS cannot fetch Fandom; 403).
  * Never return Fandom URLs to QQ when COS is enabled but upload fails.
  */
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import COS from 'cos-nodejs-sdk-v5';
@@ -376,4 +376,79 @@ export async function hostImages(urls: string[]): Promise<string[]> {
   if (!isCosEnabled()) return [];
   const out = await Promise.all(urls.map((u) => hostImageUrl(u)));
   return out.filter((u): u is string => Boolean(u && /^https:\/\//i.test(u)));
+}
+
+/**
+ * Prewarm all bundled theme PNGs under assets/img/ to COS.
+ * Lists files via readdir (same dir resolveLocalAssetPath uses).
+ * Never logs secrets — only counts.
+ */
+export type SyncBundledSummary = {
+  uploaded: number;
+  skipped: number;
+  failed: number;
+  total: number;
+};
+
+/** Resolve assets/img directory (module-relative then cwd). */
+export function resolveAssetsImgDir(): string | null {
+  const here = dirname(fileURLToPath(import.meta.url));
+  const candidates = [
+    join(here, '..', '..', 'assets', 'img'),
+    join(process.cwd(), 'assets', 'img'),
+  ];
+  for (const p of candidates) {
+    if (existsSync(p)) return p;
+  }
+  return null;
+}
+
+/** List image files under assets/img (basename only). */
+export function listBundledThemeFiles(): string[] {
+  const dir = resolveAssetsImgDir();
+  if (!dir) return [];
+  return readdirSync(dir)
+    .filter((f) => /\.(png|jpe?g|webp|gif)$/i.test(f))
+    .filter((f) => !f.includes('..') && !f.includes('/') && !f.includes('\\'))
+    .sort();
+}
+
+/**
+ * Upload-once every bundled theme asset to COS.
+ * Skips objects that already exist; counts failures without logging secrets.
+ */
+export async function syncBundledThemeAssets(): Promise<SyncBundledSummary> {
+  const files = listBundledThemeFiles();
+  const total = files.length;
+  const summary: SyncBundledSummary = { uploaded: 0, skipped: 0, failed: 0, total };
+
+  if (!isCosEnabled()) {
+    log.info(summary, 'syncBundledThemeAssets skipped (COS disabled)');
+    return summary;
+  }
+
+  for (const file of files) {
+    const local = resolveLocalAssetPath(file);
+    if (!local) {
+      summary.failed += 1;
+      log.warn({ file }, 'theme asset missing under assets/img');
+      continue;
+    }
+    const key = cosKeyForFile(file);
+    try {
+      if (await objectExists(key)) {
+        summary.skipped += 1;
+        continue;
+      }
+      const url = await hostThemeFile(file);
+      if (url) summary.uploaded += 1;
+      else summary.failed += 1;
+    } catch (err) {
+      summary.failed += 1;
+      log.warn({ file, err }, 'syncBundledThemeAssets file failed');
+    }
+  }
+
+  log.info(summary, 'syncBundledThemeAssets done');
+  return summary;
 }

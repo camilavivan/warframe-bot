@@ -112,6 +112,7 @@ QQ_BOT_SEND_IMAGES=1
 - **必须**对 `warframe-bot/img/*` 允许公有读：上传时对象 ACL `public-read`，或桶策略放行该前缀；也可用 CDN 回源。
 - 主题 PNG 位于 `assets/img/`（Docker 镜像已 `COPY assets/`）。构建机可从 `static.wikia.nocookie.net` 更新；运行时只读本地文件。
 - 首次可预热：`npm run sync-images-to-cos`（**优先**上传 `assets/img/*`；本地缺失时才回退 Fandom；COS 上已存在则跳过）。
+- 若桶内几乎为空：重建镜像后执行 `docker compose exec warframe-bot npm run sync-images-to-cos`；启动时也会自动 prewarm 全部 bundled 主题图。
 - 运行时：COS 启用且对象缺失 → `ensureObject` / `putObjectFromPath` 从本地资产上传；失败则 **跳过图片**（不返回 Fandom URL）。请确保 `warframe-bot/img/*` **公有读**。
 
 ## 要求

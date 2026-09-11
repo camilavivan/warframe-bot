@@ -13,4 +13,4 @@ config.yaml
 coverage
 .DS_Store
 tests
-scripts
+# scripts needed in image for: npm run sync-images-to-cos

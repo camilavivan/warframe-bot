@@ -8,9 +8,11 @@ import {
   hostImages,
   isCosEnabled,
   isCosPublicUrl,
+  listBundledThemeFiles,
   resolveCosConfig,
   resolveLocalAssetPath,
   resetCosState,
+  syncBundledThemeAssets,
   COS_IMG_PREFIX,
 } from '../src/core/cos.js';
 import { resetConfigCache } from '../src/config.js';
@@ -119,4 +121,19 @@ describe('COS URL builder / config (no real credentials)', () => {
       true,
     );
   });
+
+  it('listBundledThemeFiles / syncBundledThemeAssets dry path (COS off)', async () => {
+    const listed = listBundledThemeFiles();
+    assert.ok(listed.length >= Object.keys(THEME_FILES).length);
+    for (const file of Object.values(THEME_FILES)) {
+      assert.ok(listed.includes(file), `missing listed ${file}`);
+      assert.ok(resolveLocalAssetPath(file), `resolveLocalAssetPath ${file}`);
+    }
+    const summary = await syncBundledThemeAssets();
+    assert.equal(summary.total, listed.length);
+    assert.equal(summary.uploaded, 0);
+    assert.equal(summary.skipped, 0);
+    assert.equal(summary.failed, 0);
+  });
+
 });
