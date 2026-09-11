@@ -1,6 +1,7 @@
 /**
  * Public HTTPS image URLs for enriched command replies (QQ official / OneBot CQ).
- * Prefer Fandom Special:FilePath (stable aliases) and reward thumbnails when HTTPS.
+ * Prefer Fandom Special:FilePath as source; when Tencent COS is enabled, host under
+ * warframe-bot/img/* and return COS HTTPS URLs (avoids QQ 850027 on Fandom).
  * Do not rely on local VPS files for v1.
  */
 import type {
@@ -11,30 +12,53 @@ import type {
   Sortie,
   VoidTrader,
 } from './warframestat.js';
+import { hostImages, isCosEnabled } from './cos.js';
 
-/** Stable public wiki file URL (QQ Open Platform needs reachable HTTPS). */
+/** Stable public wiki file URL (source / fallback when COS disabled). */
 export function wikiImage(fileName: string): string {
   return `https://warframe.fandom.com/wiki/Special:FilePath/${encodeURIComponent(fileName)}`;
 }
 
-/** Thematic static assets — verified public HTTPS. */
+/** Theme file names under COS prefix warframe-bot/img/ */
+export const THEME_FILES = {
+  voidFissure: 'Void_Fissure.png',
+  voidTrader: 'VoidTrader.png',
+  darvo: 'Darvo.png',
+  invasion: 'Invasion.png',
+  grineer: 'Grineer.png',
+  corpus: 'Corpus.png',
+  infested: 'Infested.png',
+  archonAmar: 'ArchonAmar.png',
+  archonNira: 'ArchonNira.png',
+  archonBoreal: 'ArchonBoreal.png',
+  cetus: 'Cetus.png',
+  plains: 'Plains_of_Eidolon.png',
+  earth: 'Earth.png',
+  vallis: 'Orb_Vallis.png',
+  cambion: 'Cambion_Drift.png',
+  catalyst: 'OrokinCatalyst.png',
+} as const;
+
+export type ThemeKey = keyof typeof THEME_FILES;
+
+/** Thematic static assets — Fandom source URLs (COS hosting applied in imagesFor*). */
 export const STATIC_IMAGES = {
-  voidFissure: wikiImage('Void_Fissure.png'),
-  voidTrader: wikiImage('VoidTrader.png'),
-  darvo: wikiImage('Darvo.png'),
-  invasion: wikiImage('Invasion.png'),
-  grineer: wikiImage('Grineer.png'),
-  corpus: wikiImage('Corpus.png'),
-  infested: wikiImage('Infested.png'),
-  archonAmar: wikiImage('ArchonAmar.png'),
-  archonNira: wikiImage('ArchonNira.png'),
-  archonBoreal: wikiImage('ArchonBoreal.png'),
-  cetus: wikiImage('Cetus.png'),
-  plains: wikiImage('Plains_of_Eidolon.png'),
-  earth: wikiImage('Earth.png'),
-  vallis: wikiImage('Orb_Vallis.png'),
-  cambion: wikiImage('Cambion_Drift.png'),
-  catalyst: wikiImage('OrokinCatalyst.png'),
+  voidFissure: wikiImage(THEME_FILES.voidFissure),
+  voidTrader: wikiImage(THEME_FILES.voidTrader),
+  darvo: wikiImage(THEME_FILES.darvo),
+  invasion: wikiImage(THEME_FILES.invasion),
+  grineer: wikiImage(THEME_FILES.grineer),
+  corpus: wikiImage(THEME_FILES.corpus),
+  infested: wikiImage(THEME_FILES.infested),
+  archonAmar: wikiImage(THEME_FILES.archonAmar),
+  archonNira: wikiImage(THEME_FILES.archonNira),
+  archonBoreal: wikiImage(THEME_FILES.archonBoreal),
+  cetus: wikiImage(THEME_FILES.cetus),
+  plains: wikiImage(THEME_FILES.plains),
+  earth: wikiImage(THEME_FILES.earth),
+  vallis: wikiImage(THEME_FILES.vallis),
+  cambion: wikiImage(THEME_FILES.cambion),
+  catalyst: wikiImage(THEME_FILES.catalyst),
 } as const;
 
 const FACTION_IMAGE: Record<string, string> = {
@@ -129,35 +153,41 @@ function uniqHttps(urls: Array<string | undefined>, max = 3): string[] {
   return out;
 }
 
-export function imagesForSortie(s: Sortie | null | undefined): string[] {
-  if (!s) return [];
-  return uniqHttps([factionImage(s.faction), STATIC_IMAGES.grineer]);
+/** When COS enabled, upload-once from Fandom/source and return COS URLs; else passthrough. */
+async function publish(urls: string[]): Promise<string[]> {
+  if (!urls.length || !isCosEnabled()) return urls;
+  return hostImages(urls);
 }
 
-export function imagesForArchonHunt(h: ArchonHunt | null | undefined): string[] {
+export async function imagesForSortie(s: Sortie | null | undefined): Promise<string[]> {
+  if (!s) return [];
+  return publish(uniqHttps([factionImage(s.faction), STATIC_IMAGES.grineer]));
+}
+
+export async function imagesForArchonHunt(h: ArchonHunt | null | undefined): Promise<string[]> {
   if (!h) return [];
   const boss = (h.boss || '').toLowerCase();
   let icon = STATIC_IMAGES.archonAmar;
   if (boss.includes('nira')) icon = STATIC_IMAGES.archonNira;
   else if (boss.includes('boreal')) icon = STATIC_IMAGES.archonBoreal;
   else if (boss.includes('amar')) icon = STATIC_IMAGES.archonAmar;
-  return uniqHttps([icon, factionImage(h.faction)]);
+  return publish(uniqHttps([icon, factionImage(h.faction)]));
 }
 
-export function imagesForVoidTrader(_v?: VoidTrader | null): string[] {
-  return [STATIC_IMAGES.voidTrader];
+export async function imagesForVoidTrader(_v?: VoidTrader | null): Promise<string[]> {
+  return publish([STATIC_IMAGES.voidTrader]);
 }
 
-export function imagesForDailyDeals(deals: DailyDeal[]): string[] {
+export async function imagesForDailyDeals(deals: DailyDeal[]): Promise<string[]> {
   const fromItems = (deals || []).map((d) => itemImageFromName(d.item));
-  return uniqHttps([...fromItems, STATIC_IMAGES.darvo], 2);
+  return publish(uniqHttps([...fromItems, STATIC_IMAGES.darvo], 2));
 }
 
-export function imagesForFissures(): string[] {
-  return [STATIC_IMAGES.voidFissure];
+export async function imagesForFissures(): Promise<string[]> {
+  return publish([STATIC_IMAGES.voidFissure]);
 }
 
-export function imagesForInvasions(list: Invasion[]): string[] {
+export async function imagesForInvasions(list: Invasion[]): Promise<string[]> {
   const active = (list || []).filter((i) => !i.completed);
   const rewardImgs = active.flatMap((i) => [
     resolveRewardImage({
@@ -173,25 +203,34 @@ export function imagesForInvasions(list: Invasion[]): string[] {
     factionImage(i.attackingFaction),
     factionImage(i.defendingFaction),
   ]);
-  return uniqHttps([...rewardImgs, ...factionImgs, STATIC_IMAGES.invasion], 3);
+  return publish(uniqHttps([...rewardImgs, ...factionImgs, STATIC_IMAGES.invasion], 3));
 }
 
 export type CycleKind = 'cetus' | 'earth' | 'vallis' | 'cambion' | 'zariman';
 
-export function imagesForCycle(kind: CycleKind, c?: Cycle | null): string[] {
+export async function imagesForCycle(kind: CycleKind, c?: Cycle | null): Promise<string[]> {
   switch (kind) {
     case 'cetus':
-      return [STATIC_IMAGES.plains];
+      return publish([STATIC_IMAGES.plains]);
     case 'earth':
-      return [STATIC_IMAGES.earth];
+      return publish([STATIC_IMAGES.earth]);
     case 'vallis':
-      return [STATIC_IMAGES.vallis];
+      return publish([STATIC_IMAGES.vallis]);
     case 'cambion':
       // Vome/Fass wiki files are broken (tiny); use location art
-      return [STATIC_IMAGES.cambion];
+      return publish([STATIC_IMAGES.cambion]);
     case 'zariman':
-      return [STATIC_IMAGES.voidFissure];
+      return publish([STATIC_IMAGES.voidFissure]);
     default:
-      return c ? [STATIC_IMAGES.earth] : [];
+      return c ? publish([STATIC_IMAGES.earth]) : [];
   }
+}
+
+/** All known theme source URLs (for sync script / pre-warm). */
+export function listThemeSourceUrls(): Array<{ key: ThemeKey; file: string; sourceUrl: string }> {
+  return (Object.keys(THEME_FILES) as ThemeKey[]).map((key) => ({
+    key,
+    file: THEME_FILES[key],
+    sourceUrl: STATIC_IMAGES[key],
+  }));
 }

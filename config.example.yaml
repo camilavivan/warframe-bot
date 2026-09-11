@@ -90,3 +90,11 @@ qqofficial:
     maxQueuePerGroup: 40
     rateLimitBackoffMs: 3000
 
+# 查询配图图床（腾讯云 COS）。密钥只用环境变量 COS_SECRET_ID / COS_SECRET_KEY（或 TENCENT_*），勿写入本文件。
+# 未配置 bucket/region/密钥时自动禁用，继续用 Fandom URL（QQ 可能 850027，适配器会回退文字）。
+images:
+  cos:
+    # enabled: true          # 省略则有密钥+桶+地域时自动启用；false 强制关闭
+    bucket: "wf-1311711592"  # 也可只设环境变量 COS_BUCKET
+    region: "ap-shanghai"    # 也可只设 COS_REGION
+    # publicBaseUrl: "https://wf-1311711592.cos.ap-shanghai.myqcloud.com"  # 可选 CDN；对应 COS_PUBLIC_BASE

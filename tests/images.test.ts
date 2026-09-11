@@ -26,30 +26,30 @@ describe('images helper', () => {
     assert.match(u, /Void_Fissure/);
   });
 
-  it('maps factions and archon bosses', () => {
+  it('maps factions and archon bosses', async () => {
     assert.equal(factionImage('Grineer'), STATIC_IMAGES.grineer);
     assert.equal(factionImage('Corpus'), STATIC_IMAGES.corpus);
     assert.equal(factionImage('Infestation'), STATIC_IMAGES.infested);
-    const amar = imagesForArchonHunt({ boss: 'Archon Amar', faction: 'Narmer' });
+    const amar = await imagesForArchonHunt({ boss: 'Archon Amar', faction: 'Narmer' });
     assert.ok(amar.includes(STATIC_IMAGES.archonAmar));
-    const nira = imagesForArchonHunt({ boss: 'Archon Nira' });
+    const nira = await imagesForArchonHunt({ boss: 'Archon Nira' });
     assert.ok(nira.includes(STATIC_IMAGES.archonNira));
   });
 
-  it('sortie / fissure / trader / darvo / cycle thematic images', () => {
-    assert.ok(imagesForSortie({ faction: 'Grineer', variants: [{ node: 'a' }] }).length >= 1);
-    assert.deepEqual(imagesForFissures(), [STATIC_IMAGES.voidFissure]);
-    assert.deepEqual(imagesForVoidTrader(null), [STATIC_IMAGES.voidTrader]);
-    const deals = imagesForDailyDeals([{ item: 'Orokin Catalyst' }]);
+  it('sortie / fissure / trader / darvo / cycle thematic images', async () => {
+    assert.ok((await imagesForSortie({ faction: 'Grineer', variants: [{ node: 'a' }] })).length >= 1);
+    assert.deepEqual(await imagesForFissures(), [STATIC_IMAGES.voidFissure]);
+    assert.deepEqual(await imagesForVoidTrader(null), [STATIC_IMAGES.voidTrader]);
+    const deals = await imagesForDailyDeals([{ item: 'Orokin Catalyst' }]);
     assert.ok(deals.length >= 1);
     assert.ok(deals.every((u) => u.startsWith('https://')));
-    assert.deepEqual(imagesForCycle('cetus'), [STATIC_IMAGES.plains]);
-    assert.deepEqual(imagesForCycle('vallis'), [STATIC_IMAGES.vallis]);
-    assert.deepEqual(imagesForCycle('zariman'), [STATIC_IMAGES.voidFissure]);
+    assert.deepEqual(await imagesForCycle('cetus'), [STATIC_IMAGES.plains]);
+    assert.deepEqual(await imagesForCycle('vallis'), [STATIC_IMAGES.vallis]);
+    assert.deepEqual(await imagesForCycle('zariman'), [STATIC_IMAGES.voidFissure]);
   });
 
-  it('invasion rewards prefer mapped wiki over broken warframestat img CDN', () => {
-    const imgs = imagesForInvasions([
+  it('invasion rewards prefer mapped wiki over broken warframestat img CDN', async () => {
+    const imgs = await imagesForInvasions([
       {
         completed: false,
         attackingFaction: 'Corpus',

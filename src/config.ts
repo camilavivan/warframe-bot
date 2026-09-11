@@ -107,6 +107,25 @@ const ConfigSchema = z.object({
         .default({}),
     })
     .default({}),
+  /**
+   * Image hosting (Tencent COS). Secrets must come from env — never commit keys.
+   * When bucket/region/creds missing, COS is disabled and Fandom URLs are used.
+   */
+  images: z
+    .object({
+      cos: z
+        .object({
+          /** false forces off; omit/true enables when creds+bucket+region present */
+          enabled: z.boolean().optional(),
+          bucket: z.string().default(''),
+          /** e.g. ap-shanghai */
+          region: z.string().default(''),
+          /** Optional CDN / custom domain (no trailing slash) */
+          publicBaseUrl: z.string().optional(),
+        })
+        .default({}),
+    })
+    .default({}),
 });
 
 export type AppConfig = z.infer<typeof ConfigSchema>;
@@ -169,6 +188,20 @@ export function loadConfig(path?: string): AppConfig {
   if (process.env.WARFRAME_ARBITRATION_URL !== undefined) {
     cfg.api.arbitrationUrl = process.env.WARFRAME_ARBITRATION_URL.trim();
   }
+
+  const sendImgEnv = process.env.QQ_BOT_SEND_IMAGES;
+  if (sendImgEnv !== undefined) {
+    const v = sendImgEnv.trim().toLowerCase();
+    cfg.qqofficial.sendImages = v === '1' || v === 'true' || v === 'yes' || v === 'on';
+  }
+
+  // Tencent COS — secrets only from env; bucket/region/publicBase may be env or yaml
+  if (process.env.COS_BUCKET) cfg.images.cos.bucket = process.env.COS_BUCKET.trim();
+  if (process.env.COS_REGION) cfg.images.cos.region = process.env.COS_REGION.trim();
+  if (process.env.COS_PUBLIC_BASE) {
+    cfg.images.cos.publicBaseUrl = process.env.COS_PUBLIC_BASE.trim().replace(/\/+$/, '');
+  }
+  // COS_SECRET_ID / COS_SECRET_KEY (or TENCENT_*) read only in src/core/cos.ts — never assign into cfg
 
   // mock flag / source=mock both mean fixture mode
   if (cfg.api.source === 'mock') {

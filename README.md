@@ -78,7 +78,7 @@
 
 ### 图片回复（QQ / OneBot）
 
-部分查询命令会附带 **公开 HTTPS 图片**（Warframe Fandom `Special:FilePath` 等），无需在 VPS 上放置本地图片文件：
+部分查询命令会附带 **公开 HTTPS 图片**。推荐在国内 VPS 使用 **腾讯云 COS** 图床（避免 QQ 拉取 Fandom 外链时出现 **850027** 富媒体上传超时）；未配置 COS 时仍回退 Fandom `Special:FilePath`，适配器失败则纯文字。
 
 | 命令组 | 图片策略 |
 |--------|----------|
@@ -92,6 +92,26 @@
 - **OneBot**：可选 `[CQ:image,url=...]` 前缀；若协议端不支持则忽略图片段即可。
 - **KOOK / CLI**：目前文本-only（忽略 images）。
 - 用户可见文案请用 `「占位」`，**不要**写裸 `<占位>`（官方 SDK 会把 `<>` 当消息元素解析）。
+- **开关**：`qqofficial.sendImages` 或环境变量 `QQ_BOT_SEND_IMAGES=0/1`。
+
+#### 腾讯云 COS 图床（推荐）
+
+VPS `.env`（密钥勿提交；`docker-compose` 已 `env_file: .env`）：
+
+```bash
+COS_SECRET_ID=...
+COS_SECRET_KEY=...
+COS_BUCKET=wf-1311711592
+COS_REGION=ap-shanghai
+# 可选 CDN：COS_PUBLIC_BASE=https://wf-1311711592.cos.ap-shanghai.myqcloud.com
+QQ_BOT_SEND_IMAGES=1
+```
+
+- 对象键前缀：`warframe-bot/img/`（例如 `warframe-bot/img/Void_Fissure.png`）。
+- 默认公网 URL：`https://{bucket}.cos.{region}.myqcloud.com/{key}`。
+- **必须**对 `warframe-bot/img/*` 允许公有读：上传时对象 ACL `public-read`，或桶策略放行该前缀；也可用 CDN 回源。
+- 首次可预热：`npm run sync-images-to-cos`（从 Fandom 拉取主题图并 PUT；已存在则跳过）。
+- 运行时若 COS 已启用且对象缺失，会尝试从原 Fandom URL 上传一次再返回 COS 链接；失败则回退原 URL / 文字。
 
 ## 要求
 

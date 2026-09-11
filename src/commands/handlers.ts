@@ -101,7 +101,7 @@ export function registerAllCommands(): void {
     description: '今日突击',
     async handle(ctx) {
       const data = await fetchSortie();
-      await ctx.reply({ text: formatSortie(data), images: imagesForSortie(data) });
+      await ctx.reply({ text: formatSortie(data), images: await imagesForSortie(data) });
     },
   });
 
@@ -145,7 +145,7 @@ export function registerAllCommands(): void {
 
   async function replyFissureChunks(ctx: CommandContext, text: string): Promise<void> {
     const chunks = chunkMessage(text);
-    const images = imagesForFissures();
+    const images = await imagesForFissures();
     for (let i = 0; i < chunks.length; i++) {
       if (i === 0) await ctx.reply({ text: chunks[i], images });
       else await ctx.reply(chunks[i]);
@@ -192,7 +192,7 @@ export function registerAllCommands(): void {
     description: '入侵',
     async handle(ctx) {
       const data = await fetchInvasions();
-      await ctx.reply({ text: formatInvasions(data), images: imagesForInvasions(data) });
+      await ctx.reply({ text: formatInvasions(data), images: await imagesForInvasions(data) });
     },
   });
 
@@ -211,7 +211,7 @@ export function registerAllCommands(): void {
     description: '虚空商人',
     async handle(ctx) {
       const data = await fetchVoidTrader();
-      await ctx.reply({ text: formatVoidTrader(data), images: imagesForVoidTrader(data) });
+      await ctx.reply({ text: formatVoidTrader(data), images: await imagesForVoidTrader(data) });
     },
   });
 
@@ -221,7 +221,7 @@ export function registerAllCommands(): void {
     description: 'Darvo 每日特惠',
     async handle(ctx) {
       const data = await fetchDailyDeals();
-      await ctx.reply({ text: formatDailyDeals(data), images: imagesForDailyDeals(data) });
+      await ctx.reply({ text: formatDailyDeals(data), images: await imagesForDailyDeals(data) });
     },
   });
 
@@ -244,7 +244,7 @@ export function registerAllCommands(): void {
       const data = await fetchCetusCycle();
       await ctx.reply({
         text: formatCycle(data, '平原（希图斯）'),
-        images: imagesForCycle('cetus', data),
+        images: await imagesForCycle('cetus', data),
       });
     },
   });
@@ -255,7 +255,7 @@ export function registerAllCommands(): void {
     description: '地球昼夜',
     async handle(ctx) {
       const data = await fetchEarthCycle();
-      await ctx.reply({ text: formatCycle(data, '地球'), images: imagesForCycle('earth', data) });
+      await ctx.reply({ text: formatCycle(data, '地球'), images: await imagesForCycle('earth', data) });
     },
   });
 
@@ -267,7 +267,7 @@ export function registerAllCommands(): void {
       const data = await fetchVallisCycle();
       await ctx.reply({
         text: formatCycle(data, '金星（奥布山谷）'),
-        images: imagesForCycle('vallis', data),
+        images: await imagesForCycle('vallis', data),
       });
     },
   });
@@ -280,7 +280,7 @@ export function registerAllCommands(): void {
       const data = await fetchCambionCycle();
       await ctx.reply({
         text: formatCycle(data, '火卫二（魔胎之穴）'),
-        images: imagesForCycle('cambion', data),
+        images: await imagesForCycle('cambion', data),
       });
     },
   });
@@ -293,7 +293,7 @@ export function registerAllCommands(): void {
       const data = await fetchZarimanCycle();
       await ctx.reply({
         text: formatCycle(data, '扎里曼'),
-        images: imagesForCycle('zariman', data),
+        images: await imagesForCycle('zariman', data),
       });
     },
   });
@@ -340,7 +340,7 @@ export function registerAllCommands(): void {
     description: '执刑官猎杀',
     async handle(ctx) {
       const data = await fetchArchonHunt();
-      await ctx.reply({ text: formatArchonHunt(data), images: imagesForArchonHunt(data) });
+      await ctx.reply({ text: formatArchonHunt(data), images: await imagesForArchonHunt(data) });
     },
   });
 

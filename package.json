@@ -10,9 +10,10 @@
     "dry-run": "tsx src/core/dry-run.ts",
     "dry-run:mock": "WARFRAMESTAT_MOCK=1 tsx src/core/dry-run.ts",
     "serve-mock-api": "node scripts/serve-mock-api.mjs",
-    "test": "tsx --test tests/formatters.test.ts tests/formatters-2026.test.ts tests/dedupe.test.ts tests/locale.test.ts tests/worldstate.test.ts tests/mock.test.ts tests/de-worldstate.test.ts tests/images.test.ts tests/push-topics.test.ts tests/fissure-denoise.test.ts tests/arbitration-feed.test.ts tests/rate-limit.test.ts tests/resources.test.ts tests/cooldown.test.ts tests/fissure-args.test.ts tests/subscribe-filter.test.ts tests/wm-resolve.test.ts",
+    "test": "tsx --test tests/formatters.test.ts tests/formatters-2026.test.ts tests/dedupe.test.ts tests/locale.test.ts tests/worldstate.test.ts tests/mock.test.ts tests/de-worldstate.test.ts tests/images.test.ts tests/cos.test.ts tests/push-topics.test.ts tests/fissure-denoise.test.ts tests/arbitration-feed.test.ts tests/rate-limit.test.ts tests/resources.test.ts tests/cooldown.test.ts tests/fissure-args.test.ts tests/subscribe-filter.test.ts tests/wm-resolve.test.ts",
     "dev": "tsx src/index.ts",
-    "fetch-lexicon": "node scripts/fetch-zh-lexicon.mjs"
+    "fetch-lexicon": "node scripts/fetch-zh-lexicon.mjs",
+    "sync-images-to-cos": "node scripts/sync-images-to-cos.mjs"
   },
   "engines": {
     "node": ">=20"
@@ -28,6 +29,7 @@
   "license": "MIT",
   "dependencies": {
     "better-sqlite3": "^11.7.0",
+    "cos-nodejs-sdk-v5": "^3.0.0",
     "fastify": "^5.2.1",
     "opencc-js": "^1.4.2",
     "pino": "^9.6.0",
