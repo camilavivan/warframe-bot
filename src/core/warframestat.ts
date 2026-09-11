@@ -4,6 +4,7 @@ import { fetch, ProxyAgent, type Dispatcher } from 'undici';
 import { loadConfig } from '../config.js';
 import { globalCache } from './cache.js';
 import { logger } from './logger.js';
+import { resolveWmItem } from './wm-resolve.js';
 
 export interface WorldState {
   timestamp?: string;
@@ -389,6 +390,19 @@ export interface WmItemResult {
   urlName: string;
   sell: WmOrder[];
   buy: WmOrder[];
+}
+
+export interface WmSuggestion {
+  itemName: string;
+  urlName: string;
+}
+
+/** Outcome of wm lookup — item orders and/or Chinese Top-N suggestions. */
+export interface WmSearchOutcome {
+  item: WmItemResult | null;
+  suggestions: WmSuggestion[];
+  query: string;
+  expandedQuery: string;
 }
 
 const log = logger.child({ module: 'warframestat' });
@@ -897,38 +911,48 @@ export async function fetchDuviriCycle(): Promise<DuviriCycle> {
   return fromWorldState('duviriCycle');
 }
 
-/** Warframe.market item orders (language-agnostic url_name) */
-export async function searchWmOrders(query: string): Promise<WmItemResult | null> {
+/** Warframe.market item orders (language-agnostic url_name) + slang/fuzzy resolve */
+export async function searchWmOrders(query: string): Promise<WmSearchOutcome> {
   const cfg = loadConfig();
+  const qRaw = query.trim();
   if (cfg.api.mock) {
-    const name = query.trim() || 'mock_item';
+    const name = qRaw || 'mock_item';
     const urlName = name.toLowerCase().replace(/\s+/g, '_');
     return {
-      itemName: `[模拟] ${name}`,
-      urlName,
-      sell: [
-        { order_type: 'sell', platinum: 10, quantity: 1, user: { ingame_name: 'MockSeller', status: 'ingame' } },
-      ],
-      buy: [
-        { order_type: 'buy', platinum: 8, quantity: 1, user: { ingame_name: 'MockBuyer', status: 'online' } },
-      ],
+      query: qRaw,
+      expandedQuery: urlName,
+      suggestions: [],
+      item: {
+        itemName: `[模拟] ${name}`,
+        urlName,
+        sell: [
+          { order_type: 'sell', platinum: 10, quantity: 1, user: { ingame_name: 'MockSeller', status: 'ingame' } },
+        ],
+        buy: [
+          { order_type: 'buy', platinum: 8, quantity: 1, user: { ingame_name: 'MockBuyer', status: 'online' } },
+        ],
+      },
     };
   }
-  const q = query.trim().toLowerCase().replace(/\s+/g, '_');
-  // Resolve item via items list or direct
+
   const itemsUrl = 'https://api.warframe.market/v1/items';
   const items = await getJson<{ payload: { items: Array<{ item_name: string; url_name: string }> } }>(
     itemsUrl,
     3600_000,
     true,
   );
-  const found =
-    items.payload.items.find((i) => i.url_name === q) ||
-    items.payload.items.find((i) => i.item_name.toLowerCase() === query.trim().toLowerCase()) ||
-    items.payload.items.find((i) => i.url_name.includes(q) || i.item_name.toLowerCase().includes(query.trim().toLowerCase()));
+  const catalog = items.payload.items;
+  const resolved = resolveWmItem(catalog, qRaw, 5);
+  if (!resolved.found) {
+    return {
+      query: qRaw,
+      expandedQuery: resolved.expandedQuery,
+      item: null,
+      suggestions: resolved.suggestions.map((s) => ({ itemName: s.item_name, urlName: s.url_name })),
+    };
+  }
 
-  if (!found) return null;
-
+  const found = resolved.found;
   const ordersUrl = `https://api.warframe.market/v1/items/${found.url_name}/orders`;
   const orders = await getJson<{
     payload: { orders: Array<{ order_type: string; platinum: number; quantity: number; user: { ingame_name: string; status: string } }> };
@@ -944,7 +968,12 @@ export async function searchWmOrders(query: string): Promise<WmItemResult | null
     .sort((a, b) => b.platinum - a.platinum)
     .slice(0, 5);
 
-  return { itemName: found.item_name, urlName: found.url_name, sell, buy };
+  return {
+    query: qRaw,
+    expandedQuery: resolved.expandedQuery,
+    suggestions: resolved.suggestions.slice(0, 5).map((s) => ({ itemName: s.item_name, urlName: s.url_name })),
+    item: { itemName: found.item_name, urlName: found.url_name, sell, buy },
+  };
 }
 
 /** Simple zh/en translation via warframestat drops / items search — use drops API for keyword */

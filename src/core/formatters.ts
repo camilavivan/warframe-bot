@@ -17,6 +17,7 @@ import type {
   SyndicateMission,
   VoidTrader,
   WmItemResult,
+  WmSearchOutcome,
 } from './warframestat.js';
 import {
   isDeepArchimedea,
@@ -461,8 +462,38 @@ export function formatArchonHunt(h: ArchonHunt | null | undefined): string {
   return lines.join('\n');
 }
 
-export function formatWm(result: WmItemResult | null, query: string): string {
-  if (!result) return `未找到物品：${query}\n提示：使用英文物品名，如 "primed continuity" 或 url_name。`;
+export function formatWm(outcome: WmSearchOutcome | WmItemResult | null, query?: string): string {
+  // Back-compat: bare WmItemResult
+  if (outcome && 'sell' in outcome && 'itemName' in outcome && !('item' in outcome)) {
+    const result = outcome as WmItemResult;
+    const lines = [`【WFM】${result.itemName}`, `https://warframe.market/items/${result.urlName}`];
+    lines.push('卖单（在线/游戏内 最低）：');
+    if (!result.sell.length) lines.push('  （无）');
+    else for (const o of result.sell) lines.push(`  ${o.platinum}p ×${o.quantity} — ${o.user.ingame_name} [${o.user.status}]`);
+    lines.push('买单（在线/游戏内 最高）：');
+    if (!result.buy.length) lines.push('  （无）');
+    else for (const o of result.buy) lines.push(`  ${o.platinum}p ×${o.quantity} — ${o.user.ingame_name} [${o.user.status}]`);
+    return lines.join('\n');
+  }
+
+  const search = outcome as WmSearchOutcome | null;
+  const q = query ?? search?.query ?? '';
+  if (!search?.item) {
+    const lines = [`未找到物品：${q}`];
+    if (search?.expandedQuery && search.expandedQuery !== q) {
+      lines.push(`（已尝试：${search.expandedQuery}）`);
+    }
+    if (search?.suggestions?.length) {
+      lines.push('你是不是要找：');
+      for (const s of search.suggestions.slice(0, 5)) {
+        lines.push(`· ${s.itemName}（${s.urlName}）`);
+      }
+    } else {
+      lines.push('提示：可用英文名 / url_name，或常见黑话如「悟空p」「夜灵棱镜」。');
+    }
+    return lines.join('\n');
+  }
+  const result = search.item;
   const lines = [`【WFM】${result.itemName}`, `https://warframe.market/items/${result.urlName}`];
   lines.push('卖单（在线/游戏内 最低）：');
   if (!result.sell.length) lines.push('  （无）');
@@ -491,14 +522,14 @@ export function formatMenu(prefix: string): string {
     '赏金：赏金 地球|金星|火卫二',
     '周期：平原 / 地球 / 金星 / 火卫二 / 扎里曼',
     '',
-    '市场：wm 「物品名」',
+    '市场：wm 「物品名」（支持黑话如 悟空p；未命中给建议）',
     '翻译：翻译 「关键词」',
     '',
-    '推送：订阅列表 / 订阅 「主题」 / 取消订阅 「主题」',
+    '推送：订阅列表 / 订阅 「主题」[筛选] / 取消订阅 「主题」',
     '推送主题（中英均可订阅）：',
     '  世界状态 — 全部世界状态变更',
     '  特殊事件 / 突击 / 仲裁',
-    '  裂缝 / 平原夜 / 入侵',
+    '  裂缝 [钢铁|风暴|速刷|t1-t5] / 仲裁 [生存|防御…] / 平原夜 / 入侵',
     '  奸商 / 特惠 / 猎杀 / 日历',
   ].join('\n');
 }

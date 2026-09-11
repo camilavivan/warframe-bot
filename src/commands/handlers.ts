@@ -54,7 +54,9 @@ import {
 } from '../core/formatters.js';
 import {
   formatPushTopicsHelp,
+  formatSubscriptionFilterLabel,
   listSubscriptions,
+  parseSubscribeArgs,
   PUSH_TOPIC_LABELS,
   resolvePushTopic,
   subscribe,
@@ -364,7 +366,7 @@ export function registerAllCommands(): void {
     description: 'Warframe.market 价格',
     async handle(ctx) {
       if (!ctx.args.trim()) {
-        await ctx.reply('用法：wm 「物品名」\n例如：wm primed continuity');
+        await ctx.reply('用法：wm 「物品名」\n例如：wm primed continuity / wm 悟空p');
         return;
       }
       const result = await searchWmOrders(ctx.args.trim());
@@ -417,9 +419,10 @@ export function registerAllCommands(): void {
         await ctx.reply(`${where}暂无订阅。\n可用主题：\n${formatPushTopicsHelp()}`);
         return;
       }
-      const lines = topics.map((t: PushTopic) => {
-        const label = PUSH_TOPIC_LABELS[t] ?? t;
-        return `· ${label}`;
+      const lines = topics.map((row) => {
+        const label = PUSH_TOPIC_LABELS[row.topic] ?? row.topic;
+        const fl = formatSubscriptionFilterLabel(row.filter);
+        return fl ? `· ${label}（${fl}）` : `· ${label}`;
       });
       await ctx.reply(`【订阅列表·${where}】\n${lines.join('\n')}`);
     },
@@ -428,20 +431,26 @@ export function registerAllCommands(): void {
   registerCommand({
     name: '订阅',
     aliases: ['subscribe', 'sub'],
-    description: '订阅推送主题',
+    description: '订阅推送主题（裂缝/仲裁可带筛选）',
     async handle(ctx) {
       if (ctx.platform === 'cli') {
         await ctx.reply('CLI 模式无法订阅。');
         return;
       }
-      const topic = resolvePushTopic(ctx.args);
-      if (!topic) {
-        await ctx.reply(`用法：订阅 「主题」\n可用：\n${formatPushTopicsHelp()}`);
+      const parsed = parseSubscribeArgs(ctx.args);
+      if (!parsed) {
+        await ctx.reply(
+          `用法：订阅 「主题」[筛选]\n例：订阅 裂缝 钢铁 / 订阅 仲裁 生存\n可用：\n${formatPushTopicsHelp()}`,
+        );
         return;
       }
-      const ok = subscribe(safePlatform(ctx.platform), ctx.chatId, topic, ctx.chatType);
+      const { topic, filter, filterLabel } = parsed;
+      const outcome = subscribe(safePlatform(ctx.platform), ctx.chatId, topic, ctx.chatType, filter);
       const label = PUSH_TOPIC_LABELS[topic] ?? topic;
-      await ctx.reply(ok ? `已订阅：${label}` : `已订阅过：${label}`);
+      const shown = filterLabel ? `${label}（${filterLabel}）` : label;
+      if (outcome === 'created') await ctx.reply(`已订阅：${shown}`);
+      else if (outcome === 'updated') await ctx.reply(`已更新筛选：${shown}`);
+      else await ctx.reply(`已订阅过：${shown}`);
     },
   });
 
@@ -454,7 +463,8 @@ export function registerAllCommands(): void {
         await ctx.reply('CLI 模式无法取消订阅。');
         return;
       }
-      const topic = resolvePushTopic(ctx.args);
+      const parsed = parseSubscribeArgs(ctx.args);
+      const topic = parsed?.topic ?? resolvePushTopic(ctx.args.trim().split(/\s+/)[0] || '');
       if (!topic) {
         await ctx.reply(`用法：取消订阅 「主题」\n可用：\n${formatPushTopicsHelp()}`);
         return;

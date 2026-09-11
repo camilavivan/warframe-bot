@@ -82,9 +82,9 @@ describe('warframestat mock mode', () => {
 
   it('wm / translate stubs do not crash in mock', async () => {
     const wm = await searchWmOrders('ash_prime_set');
-    assert.ok(wm);
-    assert.match(wm!.itemName, /模拟/);
-    assert.ok(wm!.sell.length >= 1);
+    assert.ok(wm.item);
+    assert.match(wm.item!.itemName, /模拟/);
+    assert.ok(wm.item!.sell.length >= 1);
 
     const tr = await translateKeyword('Ash');
     assert.ok(tr.length >= 1);

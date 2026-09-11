@@ -19,14 +19,18 @@ import {
   formatPushCetusNight,
   formatPushSortie,
   formatVoidTrader,
+  type FissureFilter,
 } from '../core/formatters.js';
 import { logger } from '../core/logger.js';
 import {
   getSubscribers,
+  matchesArbitrationFilter,
   purgeOldDedupe,
   tryMarkPushed,
   WORLDSTATE_CHILD_TOPICS,
   type PushTopic,
+  type Subscriber,
+  type SubscriptionFilter,
 } from './db.js';
 
 const log = logger.child({ module: 'poller' });
@@ -58,7 +62,17 @@ const WORLDSTATE_FANOUT = new Set<string>(WORLDSTATE_CHILD_TOPICS);
  * matching subscription never receive a push. A chat subscribed to both the
  * child topic and `worldstate` gets a single delivery (recipient merge).
  */
-async function broadcast(topic: PushTopic, itemKey: string, text: string, send: SendFn): Promise<void> {
+/**
+ * Broadcast to topic (+ optional worldstate umbrella) subscribers.
+ * `adaptText` may return null to skip a recipient (e.g. filter mismatch).
+ */
+async function broadcast(
+  topic: PushTopic,
+  itemKey: string,
+  text: string,
+  send: SendFn,
+  adaptText?: (sub: Subscriber, baseText: string) => string | null,
+): Promise<void> {
   const deliverTopic = tryMarkPushed(topic, itemKey);
   const deliverUmbrella =
     WORLDSTATE_FANOUT.has(topic) && tryMarkPushed('worldstate', itemKey);
@@ -68,7 +82,7 @@ async function broadcast(topic: PushTopic, itemKey: string, text: string, send: 
     return;
   }
 
-  const recipients = new Map<string, ReturnType<typeof getSubscribers>[number]>();
+  const recipients = new Map<string, Subscriber>();
   if (deliverTopic) {
     for (const s of getSubscribers(topic)) {
       recipients.set(`${s.platform}:${s.chatId}`, s);
@@ -91,11 +105,24 @@ async function broadcast(topic: PushTopic, itemKey: string, text: string, send: 
   );
   for (const s of recipients.values()) {
     try {
-      await send(s.platform, s.chatId, text, s.chatType);
+      const payload = adaptText ? adaptText(s, text) : text;
+      if (payload == null || payload === '') continue;
+      await send(s.platform, s.chatId, payload, s.chatType);
     } catch (err) {
       log.error({ err, platform: s.platform, chatId: s.chatId, chatType: s.chatType }, 'send failed');
     }
   }
+}
+
+function toFissureFilter(filter: SubscriptionFilter | null | undefined): FissureFilter {
+  if (!filter) return {};
+  const out: FissureFilter = {};
+  if (filter.hard !== undefined) out.hard = filter.hard;
+  if (filter.storm !== undefined) out.storm = filter.storm;
+  if (filter.tier !== undefined) out.tier = filter.tier;
+  if (filter.tierNum !== undefined) out.tierNum = filter.tierNum;
+  if (filter.fast !== undefined) out.fast = filter.fast;
+  return out;
 }
 
 /** Derive all push topics from one WorldState (no extra HTTP). */
@@ -123,13 +150,17 @@ export async function pollFromWorldState(ws: WorldState, send: SendFn): Promise<
     }
     if (arb && !isStubArbitration(arb)) {
       const key = `arb:${arb.node}:${arb.type}:${arb.expiry ?? ''}`;
-      await broadcast('arbitration', key, `📢 仲裁刷新\n${formatArbitration(arb)}`, send);
+      const body = `📢 仲裁刷新\n${formatArbitration(arb)}`;
+      await broadcast('arbitration', key, body, send, (sub) =>
+        matchesArbitrationFilter(arb.type, sub.filter) ? body : null,
+      );
     }
   } catch (err) {
     log.warn({ err }, 'arbitration format/push failed');
   }
 
-  // Fissures — denoise: only push when net-new ids appear (or full list on first run)
+  // Fissures — denoise: only push when net-new ids appear (or full list on first run).
+  // Per-subscriber filter_json narrows the list (null filter = all).
   try {
     const fissures = ws.fissures || [];
     const active = filterFissures(fissures);
@@ -139,7 +170,11 @@ export async function pollFromWorldState(ws: WorldState, send: SendFn): Promise<
     if (active.length) {
       if (prevFissureIds === null) {
         const key = `fis:init:${[...currentIds].sort().join(',').slice(0, 180)}`;
-        await broadcast('fissures', key, `📢 裂缝更新\n${formatFissures(active)}`, send);
+        await broadcast('fissures', key, '', send, (sub) => {
+          const filtered = filterFissures(active, toFissureFilter(sub.filter));
+          if (!filtered.length) return null;
+          return `📢 裂缝更新\n${formatFissures(filtered)}`;
+        });
       } else {
         const newcomers = active.filter((f) => {
           const id = fissureId(f);
@@ -151,12 +186,11 @@ export async function pollFromWorldState(ws: WorldState, send: SendFn): Promise<
             .filter((id): id is string => Boolean(id))
             .sort();
           const key = `fis:new:${newIds.join(',').slice(0, 180)}`;
-          await broadcast(
-            'fissures',
-            key,
-            `📢 新增裂缝\n${formatFissures(newcomers, '新增裂缝')}`,
-            send,
-          );
+          await broadcast('fissures', key, '', send, (sub) => {
+            const filtered = filterFissures(newcomers, toFissureFilter(sub.filter));
+            if (!filtered.length) return null;
+            return `📢 新增裂缝\n${formatFissures(filtered, '新增裂缝')}`;
+          });
         }
       }
     }

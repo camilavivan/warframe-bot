@@ -35,21 +35,27 @@ describe('push dedupe & subscriptions', () => {
   });
 
   it('subscribe / list / unsubscribe', () => {
-    assert.equal(subscribe('onebot', '12345', 'sortie'), true);
-    assert.equal(subscribe('onebot', '12345', 'sortie'), false); // duplicate
-    assert.equal(subscribe('onebot', '12345', 'arbitration'), true);
-    assert.deepEqual(listSubscriptions('onebot', '12345'), ['arbitration', 'sortie']);
+    assert.equal(subscribe('onebot', '12345', 'sortie'), 'created');
+    assert.equal(subscribe('onebot', '12345', 'sortie'), 'unchanged'); // duplicate
+    assert.equal(subscribe('onebot', '12345', 'arbitration'), 'created');
+    assert.deepEqual(
+      listSubscriptions('onebot', '12345').map((r) => r.topic),
+      ['arbitration', 'sortie'],
+    );
 
     const subs = getSubscribers('sortie');
-    assert.ok(subs.some((s) => s.platform === 'onebot' && s.chatId === '12345' && s.chatType === 'group'));
+    assert.ok(subs.some((s) => s.platform === 'onebot' && s.chatId === '12345' && s.chatType === 'group' && s.filter === null));
 
     assert.equal(unsubscribe('onebot', '12345', 'sortie'), true);
     assert.equal(unsubscribe('onebot', '12345', 'sortie'), false);
-    assert.deepEqual(listSubscriptions('onebot', '12345'), ['arbitration']);
+    assert.deepEqual(
+      listSubscriptions('onebot', '12345').map((r) => r.topic),
+      ['arbitration'],
+    );
   });
 
   it('private chat subscriptions store chat_type', () => {
-    assert.equal(subscribe('onebot', '99901', 'cetus-night', 'private'), true);
+    assert.equal(subscribe('onebot', '99901', 'cetus-night', 'private'), 'created');
     const subs = getSubscribers('cetus-night');
     const row = subs.find((s) => s.chatId === '99901');
     assert.ok(row);
@@ -59,15 +65,15 @@ describe('push dedupe & subscriptions', () => {
 
   it('kook platform isolation', () => {
     subscribe('kook', 'ch1', 'fissures');
-    assert.deepEqual(listSubscriptions('kook', 'ch1'), ['fissures']);
+    assert.deepEqual(listSubscriptions('kook', 'ch1').map((r) => r.topic), ['fissures']);
     assert.deepEqual(listSubscriptions('onebot', 'ch1'), []);
   });
 
   it('qqofficial platform isolation', () => {
     subscribe('qqofficial', 'g_openid_1', 'sortie', 'group');
     subscribe('qqofficial', 'u_openid_1', 'cetus-night', 'private');
-    assert.deepEqual(listSubscriptions('qqofficial', 'g_openid_1'), ['sortie']);
-    assert.deepEqual(listSubscriptions('qqofficial', 'u_openid_1'), ['cetus-night']);
+    assert.deepEqual(listSubscriptions('qqofficial', 'g_openid_1').map((r) => r.topic), ['sortie']);
+    assert.deepEqual(listSubscriptions('qqofficial', 'u_openid_1').map((r) => r.topic), ['cetus-night']);
     assert.deepEqual(listSubscriptions('onebot', 'g_openid_1'), []);
     assert.deepEqual(listSubscriptions('kook', 'g_openid_1'), []);
   });
