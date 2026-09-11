@@ -27,4 +27,9 @@ describe('resource farm lookup', () => {
   it('unknown resource soft message', () => {
     assert.match(formatResourceFarm('不存在的资源xyz'), /未找到/);
   });
+
+  it('finds nitain / hexenon additions', () => {
+    assert.ok(lookupResourceFarm('硝化提取物').some((e) => e.nameEn === 'Nitain Extract'));
+    assert.ok(lookupResourceFarm('hexenon').some((e) => e.nameZh === '六氟化氙'));
+  });
 });

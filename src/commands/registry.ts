@@ -20,6 +20,37 @@ const NO_REPLY_CACHE = new Set([
 /** Short TTL for spam-query reply payloads (skip re-fetch / re-format). */
 const REPLY_CACHE_TTL_MS = 20_000;
 
+/** Per-(platform,chatId,userId,command) cooldown; subscription cmds skipped. */
+const DEFAULT_COMMAND_COOLDOWN_MS = 3_000; // 2–5s band
+const WM_COMMAND_COOLDOWN_MS = 8_000; // 5–10s for market API
+const COOLDOWN_REPLY = '稍后再试';
+
+const commandCooldownUntil = new Map<string, number>();
+
+function commandCooldownKey(
+  platform: string,
+  chatId: string,
+  userId: string,
+  command: string,
+): string {
+  return `${platform}:${chatId}:${userId}:${command.toLowerCase()}`;
+}
+
+function cooldownMsFor(commandName: string): number {
+  const n = commandName.toLowerCase();
+  if (n === 'wm' || n === '市场' || n === 'wfm') return WM_COMMAND_COOLDOWN_MS;
+  return DEFAULT_COMMAND_COOLDOWN_MS;
+}
+
+function shouldSkipCooldown(handlerName: string, matchedName: string): boolean {
+  return NO_REPLY_CACHE.has(handlerName) || NO_REPLY_CACHE.has(matchedName.toLowerCase());
+}
+
+/** Test helper: clear in-memory command cooldowns. */
+export function resetCommandCooldownsForTests(): void {
+  commandCooldownUntil.clear();
+}
+
 function replyCacheKey(name: string, args: string): string {
   return `cmd-reply:${name.toLowerCase()}:${args.trim().toLowerCase()}`;
 }
@@ -94,6 +125,17 @@ export async function dispatch(ctx: {
   if (!handler) {
     await ctx.reply(`未知命令：${matched.name}\n发送「菜单」查看帮助。`);
     return true;
+  }
+
+  if (!shouldSkipCooldown(handler.name, matched.name)) {
+    const cdKey = commandCooldownKey(ctx.platform, chatId, ctx.userId, handler.name);
+    const until = commandCooldownUntil.get(cdKey) ?? 0;
+    const now = Date.now();
+    if (until > now) {
+      await ctx.reply(COOLDOWN_REPLY);
+      return true;
+    }
+    commandCooldownUntil.set(cdKey, now + cooldownMsFor(handler.name));
   }
 
   const cacheable = !NO_REPLY_CACHE.has(handler.name) && !NO_REPLY_CACHE.has(nameLower);

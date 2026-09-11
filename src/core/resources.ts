@@ -252,6 +252,55 @@ export const RESOURCE_FARM_DATA: ResourceFarmEntry[] = [
       '多捡反应物（reactant）、提高遗物反应品质有助于效率',
     ],
   },
+  {
+    nameZh: '硝化提取物',
+    nameEn: 'Nitain Extract',
+    aliases: ['nitain', 'nitain extract', '硝化', '硝化精粹'],
+    locations: [
+      '夜波（Nightwave）商店常用兑换',
+      '部分警报 / 入侵奖励历史上也有',
+      '活动与登录奖励偶尔投放',
+    ],
+    tip: '日常优先囤夜波声望换取，比硬刷警报稳。',
+  },
+  {
+    nameZh: '六氟化氙',
+    nameEn: 'Hexenon',
+    aliases: ['hexenon', '六氟氙', '氙'],
+    locations: [
+      '木星气体城市：击杀 Amalgam 敌人',
+      '推荐：木星·Themisto（歼灭）或木星防御 / 生存清 Amalgam',
+    ],
+    tip: '开资源加成后清 Amalgam 效率更好。',
+  },
+  {
+    nameZh: '回收金属',
+    nameEn: 'Salvage',
+    aliases: ['salvage', '回收', '废料'],
+    locations: [
+      '火星、木星、天王星等常见基础资源',
+      '推荐：火星或木星歼灭 / 防御挂机',
+    ],
+  },
+  {
+    nameZh: '钛',
+    nameEn: 'Titanium',
+    aliases: ['titanium', '钛金属'],
+    locations: [
+      'Railjack：摧毁残骸、完成天体节点任务',
+      '部分地球/金星轨道节点也掉',
+    ],
+    tip: 'Railjack 资源爆发与真空拾取很有用。',
+  },
+  {
+    nameZh: '同位素',
+    nameEn: 'Isos',
+    aliases: ['isos', 'iso'],
+    locations: [
+      'Corpus 船舰 / 气体城市任务常见',
+      '推荐：木星、海王星、欧罗巴短任务',
+    ],
+  },
 ];
 
 function norm(s: string): string {

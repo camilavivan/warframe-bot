@@ -29,6 +29,7 @@ import {
 } from '../core/warframestat.js';
 import {
   filterFissures,
+  parseFissureArgs,
   formatAlerts,
   formatArbitration,
   formatArbitrationSchedule,
@@ -140,12 +141,13 @@ export function registerAllCommands(): void {
 
   registerCommand({
     name: '裂缝',
-    aliases: ['fissure', 'fissures'],
-    description: '虚空裂缝',
+    aliases: ['fissure', 'fissures', '裂隙', '虚空裂缝'],
+    description: '虚空裂缝（可筛：钢铁/风暴/t1-t5/速刷）',
     async handle(ctx) {
       const all = await fetchFissures();
-      const normal = filterFissures(all, { hard: false, storm: false });
-      await ctx.reply({ text: formatFissures(normal, '裂缝'), images: imagesForFissures() });
+      const { filter, title } = parseFissureArgs(ctx.args);
+      const filtered = filterFissures(all, filter);
+      await ctx.reply({ text: formatFissures(filtered, title), images: imagesForFissures() });
     },
   });
 

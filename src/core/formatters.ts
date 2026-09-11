@@ -139,7 +139,100 @@ export type FissureFilter = {
   hard?: boolean; // 钢铁裂缝
   storm?: boolean; // 虚空风暴
   tier?: string;
+  tierNum?: number;
+  /** Capture / Exterminate / Rescue heuristic */
+  fast?: boolean;
 };
+
+const FISSURE_TIER_ALIASES: Record<string, { tier: string; tierNum: number }> = {
+  t1: { tier: 'Lith', tierNum: 1 },
+  lith: { tier: 'Lith', tierNum: 1 },
+  古纪: { tier: 'Lith', tierNum: 1 },
+  t2: { tier: 'Meso', tierNum: 2 },
+  meso: { tier: 'Meso', tierNum: 2 },
+  前纪: { tier: 'Meso', tierNum: 2 },
+  t3: { tier: 'Neo', tierNum: 3 },
+  neo: { tier: 'Neo', tierNum: 3 },
+  中纪: { tier: 'Neo', tierNum: 3 },
+  t4: { tier: 'Axi', tierNum: 4 },
+  axi: { tier: 'Axi', tierNum: 4 },
+  后纪: { tier: 'Axi', tierNum: 4 },
+  t5: { tier: 'Requiem', tierNum: 5 },
+  requiem: { tier: 'Requiem', tierNum: 5 },
+  安魂: { tier: 'Requiem', tierNum: 5 },
+  t6: { tier: 'Omnia', tierNum: 6 },
+  omnia: { tier: 'Omnia', tierNum: 6 },
+  万用: { tier: 'Omnia', tierNum: 6 },
+};
+
+const FAST_MISSION_KEYS = ['capture', 'exterminate', 'extermination', 'rescue', '捕获', '歼灭', '救援'];
+
+/** True for short fissure missions (捕获/歼灭/救援). */
+export function isFastFissureMission(missionType?: string): boolean {
+  const m = (missionType || '').trim().toLowerCase();
+  if (!m) return false;
+  return FAST_MISSION_KEYS.some((k) => m === k.toLowerCase() || m.includes(k.toLowerCase()));
+}
+
+/**
+ * Parse `裂缝` args: 钢铁|风暴|t1-t5|速刷 (and common EN/zh aliases).
+ * No args → normal (non-hard, non-storm). `速刷` alone defaults to non-hard.
+ */
+export function parseFissureArgs(args: string): { filter: FissureFilter; title: string } {
+  const tokens = args
+    .trim()
+    .split(/[\s,，、|/]+/)
+    .map((t) => t.trim())
+    .filter(Boolean);
+
+  if (!tokens.length) {
+    return { filter: { hard: false, storm: false }, title: '裂缝' };
+  }
+
+  const filter: FissureFilter = {};
+  const titleParts: string[] = [];
+  let sawFast = false;
+
+  for (const raw of tokens) {
+    const t = raw.toLowerCase();
+    if (t === '钢铁' || t === 'hard' || t === 'sp' || t === 'steel' || t === 'steelpath') {
+      filter.hard = true;
+      if (!titleParts.includes('钢铁')) titleParts.push('钢铁');
+      continue;
+    }
+    if (t === '风暴' || t === 'storm' || t === '虚空风暴') {
+      filter.storm = true;
+      if (!titleParts.includes('风暴')) titleParts.push('风暴');
+      continue;
+    }
+    if (t === '速刷' || t === 'fast' || t === 'quick' || t === 'speed') {
+      filter.fast = true;
+      sawFast = true;
+      if (!titleParts.includes('速刷')) titleParts.push('速刷');
+      continue;
+    }
+    if (t === '普通' || t === 'normal') {
+      filter.hard = false;
+      filter.storm = false;
+      continue;
+    }
+    const mapped = FISSURE_TIER_ALIASES[t];
+    if (mapped) {
+      filter.tier = mapped.tier;
+      filter.tierNum = mapped.tierNum;
+      if (!titleParts.includes(mapped.tier)) titleParts.push(mapped.tier);
+      continue;
+    }
+  }
+
+  // 速刷默认排除钢铁之路（显式「钢铁」时保留）
+  if (sawFast && filter.hard === undefined) {
+    filter.hard = false;
+  }
+
+  const title = titleParts.length ? `${titleParts.join('·')}裂缝` : '裂缝';
+  return { filter, title };
+}
 
 function isFissureActive(f: Fissure): boolean {
   if (f.expired) return false;
@@ -155,7 +248,13 @@ export function filterFissures(list: Fissure[], filter: FissureFilter = {}): Fis
     .filter(isFissureActive)
     .filter((f) => (filter.hard === undefined ? true : !!f.isHard === filter.hard))
     .filter((f) => (filter.storm === undefined ? true : !!f.isStorm === filter.storm))
-    .filter((f) => (filter.tier ? (f.tier || '').toLowerCase().includes(filter.tier.toLowerCase()) : true))
+    .filter((f) => (filter.tierNum !== undefined ? f.tierNum === filter.tierNum : true))
+    .filter((f) =>
+      filter.tierNum !== undefined || !filter.tier
+        ? true
+        : (f.tier || '').toLowerCase().includes(filter.tier.toLowerCase()),
+    )
+    .filter((f) => (filter.fast ? isFastFissureMission(f.missionType) : true))
     .sort((a, b) => (a.tierNum ?? 0) - (b.tierNum ?? 0));
 }
 
@@ -381,7 +480,7 @@ export function formatMenu(prefix: string): string {
     '',
     '世界状态：',
     '  突击 / 仲裁 / 今日仲裁 / 高效仲裁',
-    '  裂缝 / 钢铁裂缝 / 虚空风暴',
+    '  裂缝 [钢铁|风暴|t1-t5|速刷] / 钢铁裂缝 / 虚空风暴',
     '  入侵 / 警报 / 奸商 / 特惠 / 活动 / 新闻',
     '  资源 「名称」 / 哪里刷 「名称」 — 常见资源掉落地',
     '  电波 / 舰队 / 猎杀',
