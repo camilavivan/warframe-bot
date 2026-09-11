@@ -6,6 +6,7 @@ import {
   zh,
   zhNode,
 } from '../src/core/locale-zh.js';
+import { toSimplified } from '../src/core/zh-simplify.js';
 
 describe('locale zh()', () => {
   it('translates mission types (exact + case-insensitive)', () => {
@@ -76,5 +77,16 @@ describe('lexicon size', () => {
     assert.ok(s.overrides >= 200, `overrides ${s.overrides}`);
     assert.ok(s.generated >= 400, `generated ${s.generated}`);
     assert.ok(s.merged >= 600, `merged ${s.merged}`);
+  });
+});
+
+describe('toSimplified', () => {
+  it('converts Traditional Sedna to Simplified', () => {
+    assert.equal(toSimplified('賽德娜'), '赛德娜');
+  });
+
+  it('no-ops empty / already simplified', () => {
+    assert.equal(toSimplified(''), '');
+    assert.equal(toSimplified('赛德娜'), '赛德娜');
   });
 });

@@ -14,6 +14,7 @@ import {
   isVoidTraderActive,
   type WorldState,
 } from './warframestat.js';
+import { deepToSimplified } from './zh-simplify.js';
 
 const log = logger.child({ module: 'de-worldstate' });
 
@@ -120,7 +121,8 @@ export function mapParsedWorldState(parsed: unknown): WorldState {
     });
   }
 
-  return plain;
+  // warframe-worldstate-data `zh` is Traditional; normalize to Simplified for users
+  return deepToSimplified(plain);
 }
 
 /**

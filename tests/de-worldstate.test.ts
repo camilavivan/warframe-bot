@@ -50,6 +50,23 @@ describe('parseDeWorldStateJson', () => {
     assert.equal(ws.arbitration, undefined);
   });
 
+
+  it('normalizes Traditional zh node names to Simplified (Selkie/Marid)', async () => {
+    const ws = await parseDeWorldStateJson(rawSlim, 'zh');
+    const blob = JSON.stringify(ws);
+    assert.equal(blob.includes('賽德娜'), false, 'must not keep Traditional 賽德娜');
+    assert.ok(blob.includes('赛德娜'), 'must use Simplified 赛德娜');
+    const invNodes = (ws.invasions ?? []).map((i: { node?: string }) => i.node ?? '');
+    assert.ok(
+      invNodes.some((n) => n.includes('Selkie') && n.includes('赛德娜')),
+      `Selkie node: ${invNodes.join(' | ')}`,
+    );
+    assert.ok(
+      invNodes.some((n) => n.includes('Marid') && n.includes('赛德娜')),
+      `Marid node: ${invNodes.join(' | ')}`,
+    );
+  });
+
   it('formatters accept DE-mapped shapes', async () => {
     const ws = await parseDeWorldStateJson(rawSlim, 'zh');
     assert.match(formatPushSortie(ws.sortie!), /突击|刷新|Boss|执政官|敌人/i);

@@ -3,6 +3,7 @@
  * Hand-maintained OVERRIDES always win over locale-zh.generated.ts.
  */
 import { GENERATED_ZH } from './locale-zh.generated.js';
+import { toSimplified } from './zh-simplify.js';
 
 /** Hand-maintained overrides (missions, factions, modifiers, cycles, key nodes). */
 const OVERRIDES: Record<string, string> = {
@@ -624,15 +625,17 @@ export function zh(text: string | undefined | null): string {
   const raw = text.trim();
   if (!raw) return '';
 
-  if (MAP[raw]) return MAP[raw];
+  const finish = (s: string) => toSimplified(s);
+
+  if (MAP[raw]) return finish(MAP[raw]);
   const lower = raw.toLowerCase();
-  if (LOWER_INDEX.has(lower)) return LOWER_INDEX.get(lower)!;
+  if (LOWER_INDEX.has(lower)) return finish(LOWER_INDEX.get(lower)!);
 
   const stripped = stripParens(raw);
   if (stripped && stripped !== raw) {
-    if (MAP[stripped]) return MAP[stripped];
+    if (MAP[stripped]) return finish(MAP[stripped]);
     const sl = stripped.toLowerCase();
-    if (LOWER_INDEX.has(sl)) return LOWER_INDEX.get(sl)!;
+    if (LOWER_INDEX.has(sl)) return finish(LOWER_INDEX.get(sl)!);
   }
 
   // Fuzzy: if a short dictionary key is contained in the text (prefer longer keys)
@@ -648,10 +651,10 @@ export function zh(text: string | undefined | null): string {
   if (bestZh) {
     // Replace the matched segment
     const re = new RegExp(bestKey.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
-    return raw.replace(re, bestZh);
+    return finish(raw.replace(re, bestZh));
   }
 
-  return raw;
+  return finish(raw);
 }
 
 /**
@@ -661,6 +664,8 @@ export function zhNode(node: string | undefined | null): string {
   if (!node) return '?';
   const raw = node.trim();
   if (!raw) return '?';
+
+  const finish = (s: string) => toSimplified(s);
 
   // Prefer part-wise translation so proper-name overrides beat generated "Name (Planet)" rows
   const m = raw.match(/^(.+?)\s*[（(](.+)[）)]\s*$/);
@@ -672,17 +677,17 @@ export function zhNode(node: string | undefined | null): string {
     const zhPlanet =
       MAP[planet] || LOWER_INDEX.get(planet.toLowerCase()) || planet;
     if (zhName !== name || zhPlanet !== planet) {
-      return `${zhName}（${zhPlanet}）`;
+      return finish(`${zhName}（${zhPlanet}）`);
     }
   }
 
-  if (MAP[raw]) return MAP[raw];
+  if (MAP[raw]) return finish(MAP[raw]);
   const lower = raw.toLowerCase();
-  if (LOWER_INDEX.has(lower)) return LOWER_INDEX.get(lower)!;
+  if (LOWER_INDEX.has(lower)) return finish(LOWER_INDEX.get(lower)!);
 
-  if (/^SolNode\d+$/i.test(raw)) return raw;
+  if (/^SolNode\d+$/i.test(raw)) return finish(raw);
 
-  return zh(raw) || raw;
+  return finish(zh(raw) || raw);
 }
 
 /**
