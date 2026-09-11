@@ -2,8 +2,13 @@
  * Tencent COS helper for hosting QQ theme images.
  * Secrets only via env (COS_SECRET_ID / COS_SECRET_KEY or TENCENT_*).
  * Never log secret values. When bucket/region/creds missing → no-op (disabled).
+ *
+ * Prefer bundled assets/img/* → putObject (CN VPS cannot fetch Fandom; 403).
+ * Never return Fandom URLs to QQ when COS is enabled but upload fails.
  */
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import COS from 'cos-nodejs-sdk-v5';
 import { loadConfig } from '../config.js';
 import { createLogger } from './logger.js';
@@ -119,6 +124,28 @@ function contentTypeForKey(key: string): string {
   return 'application/octet-stream';
 }
 
+function leafFileName(fileName: string): string {
+  return fileName.replace(/^\/+/, '').replace(/^.*\//, '');
+}
+
+/**
+ * Resolve bundled theme PNG under assets/img/{file}.
+ * Checks relative to this module (dist/ or src/) then process.cwd().
+ */
+export function resolveLocalAssetPath(fileName: string): string | null {
+  const base = leafFileName(fileName);
+  if (!base || base.includes('..') || base.includes('\\')) return null;
+  const here = dirname(fileURLToPath(import.meta.url));
+  const candidates = [
+    join(here, '..', '..', 'assets', 'img', base),
+    join(process.cwd(), 'assets', 'img', base),
+  ];
+  for (const p of candidates) {
+    if (existsSync(p)) return p;
+  }
+  return null;
+}
+
 /** HEAD object — true if exists. On disabled COS, false. */
 export async function objectExists(key: string): Promise<boolean> {
   const s = resolveCosConfig();
@@ -183,6 +210,40 @@ export async function ensureObject(
     return getPublicUrl(cleanKey, s);
   }
   return putObject(cleanKey, body, opts);
+}
+
+/** Upload-once from a local file path (deduped). Returns COS URL or null. */
+export async function ensureObjectFromPath(key: string, filePath: string): Promise<string | null> {
+  const s = resolveCosConfig();
+  if (!s.enabled) return null;
+  const cleanKey = key.replace(/^\/+/, '');
+
+  const existing = ensureInflight.get(cleanKey);
+  if (existing) {
+    try {
+      return await existing;
+    } catch {
+      return null;
+    }
+  }
+
+  const job = (async (): Promise<string> => {
+    if (await objectExists(cleanKey)) {
+      return getPublicUrl(cleanKey, s);
+    }
+    const url = await putObjectFromPath(cleanKey, filePath);
+    if (!url) throw new Error('putObjectFromPath returned null');
+    return url;
+  })();
+
+  ensureInflight.set(cleanKey, job);
+  try {
+    return await job;
+  } catch (err) {
+    ensureInflight.delete(cleanKey);
+    log.warn({ key: cleanKey, err }, 'COS ensureObjectFromPath failed');
+    return null;
+  }
 }
 
 /**
@@ -272,24 +333,47 @@ export function isCosPublicUrl(url: string, settings?: CosRuntimeConfig): boolea
 }
 
 /**
- * When COS enabled: ensure object exists (upload once from sourceUrl on miss) and return COS HTTPS URL.
- * On failure or disabled: return sourceUrl unchanged (QQ adapter still has text fallback).
+ * Host a theme file from assets/img/{fileName} to COS.
+ * Never downloads Fandom. Returns COS HTTPS URL or null.
  */
-export async function hostImageUrl(sourceUrl: string): Promise<string> {
-  if (!sourceUrl || !/^https:\/\//i.test(sourceUrl)) return sourceUrl;
+export async function hostThemeFile(fileName: string): Promise<string | null> {
   const s = resolveCosConfig();
-  if (!s.enabled) return sourceUrl;
+  if (!s.enabled) return null;
+  const base = leafFileName(fileName);
+  const local = resolveLocalAssetPath(base);
+  if (!local) {
+    log.warn({ file: base }, 'theme asset missing under assets/img');
+    return null;
+  }
+  return ensureObjectFromPath(cosKeyForFile(base), local);
+}
+
+/**
+ * When COS enabled: prefer local assets/img, else upload-once from sourceUrl.
+ * On failure or disabled: return null (do NOT return Fandom URL to QQ).
+ */
+export async function hostImageUrl(sourceUrl: string): Promise<string | null> {
+  if (!sourceUrl || !/^https:\/\//i.test(sourceUrl)) return null;
+  const s = resolveCosConfig();
+  if (!s.enabled) return null;
   if (isCosPublicUrl(sourceUrl, s)) return sourceUrl;
 
   const key = cosKeyFromSourceUrl(sourceUrl);
-  if (!key) return sourceUrl;
+  if (!key) return null;
 
-  const uploaded = await uploadFromUrl(sourceUrl, key);
-  return uploaded ?? sourceUrl;
+  const leaf = key.slice(COS_IMG_PREFIX.length);
+  const local = resolveLocalAssetPath(leaf);
+  if (local) {
+    return ensureObjectFromPath(key, local);
+  }
+
+  // Last resort for unbundled item art — may 403 on CN VPS; never fall back to Fandom
+  return uploadFromUrl(sourceUrl, key);
 }
 
 export async function hostImages(urls: string[]): Promise<string[]> {
   if (!urls.length) return [];
-  if (!isCosEnabled()) return [...urls];
-  return Promise.all(urls.map((u) => hostImageUrl(u)));
+  if (!isCosEnabled()) return [];
+  const out = await Promise.all(urls.map((u) => hostImageUrl(u)));
+  return out.filter((u): u is string => Boolean(u && /^https:\/\//i.test(u)));
 }

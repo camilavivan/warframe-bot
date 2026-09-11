@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 /**
- * Pre-upload known theme images from Warframe Fandom to Tencent COS.
+ * Pre-upload known theme images to Tencent COS.
+ * Prefer local assets/img/* (bundled in the Docker image); fall back to Fandom
+ * only when a local file is missing (build machine / non-CN network).
  *
  * Requires env (do not print secrets):
  *   COS_SECRET_ID / COS_SECRET_KEY (or TENCENT_SECRET_ID / TENCENT_SECRET_KEY)
@@ -13,9 +15,14 @@
  * Usage: node scripts/sync-images-to-cos.mjs
  *    or: npm run sync-images-to-cos
  */
+import { existsSync, readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import COS from 'cos-nodejs-sdk-v5';
 
 const PREFIX = 'warframe-bot/img/';
+const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
+const ASSETS_IMG = join(ROOT, 'assets', 'img');
 
 const THEME_FILES = [
   'Void_Fissure.png',
@@ -64,6 +71,27 @@ async function headExists(cos, bucket, region, key) {
   }
 }
 
+async function loadBody(file) {
+  const local = join(ASSETS_IMG, file);
+  if (existsSync(local)) {
+    const buf = readFileSync(local);
+    if (!buf.length) throw new Error('local empty');
+    return { buf, source: `local:${local}` };
+  }
+  const source = wikiUrl(file);
+  const res = await fetch(source, {
+    method: 'GET',
+    redirect: 'follow',
+    signal: AbortSignal.timeout(60_000),
+  });
+  if (!res.ok) {
+    throw new Error(`download status=${res.status}`);
+  }
+  const buf = Buffer.from(await res.arrayBuffer());
+  if (!buf.length) throw new Error('download empty');
+  return { buf, source };
+}
+
 async function main() {
   const secretId = envFirst('COS_SECRET_ID', 'TENCENT_SECRET_ID');
   const secretKey = envFirst('COS_SECRET_KEY', 'TENCENT_SECRET_KEY');
@@ -89,6 +117,7 @@ async function main() {
       secretIdLen: secretId.length,
       secretKeyLen: secretKey.length,
       files: THEME_FILES.length,
+      assetsImg: ASSETS_IMG,
     }),
   );
 
@@ -99,29 +128,13 @@ async function main() {
 
   for (const file of THEME_FILES) {
     const key = `${PREFIX}${file}`;
-    const source = wikiUrl(file);
     try {
       if (await headExists(cos, bucket, region, key)) {
         skipped += 1;
         console.log(`skip exists ${key}`);
         continue;
       }
-      const res = await fetch(source, {
-        method: 'GET',
-        redirect: 'follow',
-        signal: AbortSignal.timeout(60_000),
-      });
-      if (!res.ok) {
-        failed += 1;
-        console.error(`download fail ${file} status=${res.status}`);
-        continue;
-      }
-      const buf = Buffer.from(await res.arrayBuffer());
-      if (!buf.length) {
-        failed += 1;
-        console.error(`download empty ${file}`);
-        continue;
-      }
+      const { buf, source } = await loadBody(file);
       await cos.putObject({
         Bucket: bucket,
         Region: region,
@@ -131,7 +144,7 @@ async function main() {
         ACL: 'public-read',
       });
       uploaded += 1;
-      console.log(`ok ${publicUrl(bucket, region, key, publicBase)}`);
+      console.log(`ok ${publicUrl(bucket, region, key, publicBase)} (${source})`);
     } catch (err) {
       failed += 1;
       console.error(`fail ${file}:`, err?.message || err);

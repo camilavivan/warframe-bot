@@ -1,8 +1,9 @@
 /**
  * Public HTTPS image URLs for enriched command replies (QQ official / OneBot CQ).
- * Prefer Fandom Special:FilePath as source; when Tencent COS is enabled, host under
- * warframe-bot/img/* and return COS HTTPS URLs (avoids QQ 850027 on Fandom).
- * Do not rely on local VPS files for v1.
+ * Theme PNGs are bundled under assets/img/ (see THEME_FILES). When Tencent COS is
+ * enabled, upload from local assets and return COS HTTPS URLs — never fetch Fandom
+ * from the runtime VPS (CN egress often gets 403). When COS is off or upload fails,
+ * return no image URLs (text-only) so QQ does not hit 850027 on Fandom.
  */
 import type {
   ArchonHunt,
@@ -12,14 +13,14 @@ import type {
   Sortie,
   VoidTrader,
 } from './warframestat.js';
-import { hostImages, isCosEnabled } from './cos.js';
+import { hostImages, hostThemeFile, isCosEnabled } from './cos.js';
 
-/** Stable public wiki file URL (source / fallback when COS disabled). */
+/** Stable public wiki file URL (reference / sync fallback; not sent to QQ). */
 export function wikiImage(fileName: string): string {
   return `https://warframe.fandom.com/wiki/Special:FilePath/${encodeURIComponent(fileName)}`;
 }
 
-/** Theme file names under COS prefix warframe-bot/img/ */
+/** Theme file names under COS prefix warframe-bot/img/ and assets/img/ */
 export const THEME_FILES = {
   voidFissure: 'Void_Fissure.png',
   voidTrader: 'VoidTrader.png',
@@ -61,6 +62,15 @@ export const STATIC_IMAGES = {
   catalyst: wikiImage(THEME_FILES.catalyst),
 } as const;
 
+const FACTION_FILE: Record<string, string> = {
+  grineer: THEME_FILES.grineer,
+  corpus: THEME_FILES.corpus,
+  infestation: THEME_FILES.infested,
+  infested: THEME_FILES.infested,
+  orokin: THEME_FILES.corpus,
+  narmer: THEME_FILES.archonAmar,
+};
+
 const FACTION_IMAGE: Record<string, string> = {
   grineer: STATIC_IMAGES.grineer,
   corpus: STATIC_IMAGES.corpus,
@@ -93,6 +103,11 @@ function normKey(s: string): string {
 export function factionImage(faction?: string): string | undefined {
   if (!faction) return undefined;
   return FACTION_IMAGE[normKey(faction)] ?? FACTION_IMAGE[faction.toLowerCase()];
+}
+
+export function factionThemeFile(faction?: string): string | undefined {
+  if (!faction) return undefined;
+  return FACTION_FILE[normKey(faction)] ?? FACTION_FILE[faction.toLowerCase()];
 }
 
 export function itemImageFromName(name?: string): string | undefined {
@@ -153,29 +168,56 @@ function uniqHttps(urls: Array<string | undefined>, max = 3): string[] {
   return out;
 }
 
-/** When COS enabled, upload-once from Fandom/source and return COS URLs; else passthrough. */
+function uniqFiles(files: Array<string | undefined>, max = 3): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const f of files) {
+    if (!f || seen.has(f)) continue;
+    seen.add(f);
+    out.push(f);
+    if (out.length >= max) break;
+  }
+  return out;
+}
+
+/**
+ * Publish theme file names via local assets → COS.
+ * When COS disabled or upload fails: [] (no Fandom to QQ).
+ */
+async function publishThemeFiles(files: string[]): Promise<string[]> {
+  if (!files.length || !isCosEnabled()) return [];
+  const urls = await Promise.all(files.map((f) => hostThemeFile(f)));
+  return urls.filter((u): u is string => Boolean(u && /^https:\/\//i.test(u)));
+}
+
+/**
+ * Publish mixed HTTPS source URLs (theme wiki + item maps) via hostImages.
+ * Prefers bundled assets; never returns Fandom on failure / COS off.
+ */
 async function publish(urls: string[]): Promise<string[]> {
-  if (!urls.length || !isCosEnabled()) return urls;
+  if (!urls.length || !isCosEnabled()) return [];
   return hostImages(urls);
 }
 
 export async function imagesForSortie(s: Sortie | null | undefined): Promise<string[]> {
   if (!s) return [];
-  return publish(uniqHttps([factionImage(s.faction), STATIC_IMAGES.grineer]));
+  return publishThemeFiles(
+    uniqFiles([factionThemeFile(s.faction), THEME_FILES.grineer]),
+  );
 }
 
 export async function imagesForArchonHunt(h: ArchonHunt | null | undefined): Promise<string[]> {
   if (!h) return [];
   const boss = (h.boss || '').toLowerCase();
-  let icon = STATIC_IMAGES.archonAmar;
-  if (boss.includes('nira')) icon = STATIC_IMAGES.archonNira;
-  else if (boss.includes('boreal')) icon = STATIC_IMAGES.archonBoreal;
-  else if (boss.includes('amar')) icon = STATIC_IMAGES.archonAmar;
-  return publish(uniqHttps([icon, factionImage(h.faction)]));
+  let icon: string = THEME_FILES.archonAmar;
+  if (boss.includes('nira')) icon = THEME_FILES.archonNira;
+  else if (boss.includes('boreal')) icon = THEME_FILES.archonBoreal;
+  else if (boss.includes('amar')) icon = THEME_FILES.archonAmar;
+  return publishThemeFiles(uniqFiles([icon, factionThemeFile(h.faction)]));
 }
 
 export async function imagesForVoidTrader(_v?: VoidTrader | null): Promise<string[]> {
-  return publish([STATIC_IMAGES.voidTrader]);
+  return publishThemeFiles([THEME_FILES.voidTrader]);
 }
 
 export async function imagesForDailyDeals(deals: DailyDeal[]): Promise<string[]> {
@@ -184,7 +226,7 @@ export async function imagesForDailyDeals(deals: DailyDeal[]): Promise<string[]>
 }
 
 export async function imagesForFissures(): Promise<string[]> {
-  return publish([STATIC_IMAGES.voidFissure]);
+  return publishThemeFiles([THEME_FILES.voidFissure]);
 }
 
 export async function imagesForInvasions(list: Invasion[]): Promise<string[]> {
@@ -211,18 +253,18 @@ export type CycleKind = 'cetus' | 'earth' | 'vallis' | 'cambion' | 'zariman';
 export async function imagesForCycle(kind: CycleKind, c?: Cycle | null): Promise<string[]> {
   switch (kind) {
     case 'cetus':
-      return publish([STATIC_IMAGES.plains]);
+      return publishThemeFiles([THEME_FILES.plains]);
     case 'earth':
-      return publish([STATIC_IMAGES.earth]);
+      return publishThemeFiles([THEME_FILES.earth]);
     case 'vallis':
-      return publish([STATIC_IMAGES.vallis]);
+      return publishThemeFiles([THEME_FILES.vallis]);
     case 'cambion':
       // Vome/Fass wiki files are broken (tiny); use location art
-      return publish([STATIC_IMAGES.cambion]);
+      return publishThemeFiles([THEME_FILES.cambion]);
     case 'zariman':
-      return publish([STATIC_IMAGES.voidFissure]);
+      return publishThemeFiles([THEME_FILES.voidFissure]);
     default:
-      return c ? publish([STATIC_IMAGES.earth]) : [];
+      return c ? publishThemeFiles([THEME_FILES.earth]) : [];
   }
 }
 

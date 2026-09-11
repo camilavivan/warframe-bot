@@ -78,7 +78,7 @@
 
 ### 图片回复（QQ / OneBot）
 
-部分查询命令会附带 **公开 HTTPS 图片**。推荐在国内 VPS 使用 **腾讯云 COS** 图床（避免 QQ 拉取 Fandom 外链时出现 **850027** 富媒体上传超时）；未配置 COS 时仍回退 Fandom `Special:FilePath`，适配器失败则纯文字。
+部分查询命令会附带 **公开 HTTPS 图片**。推荐在国内 VPS 使用 **腾讯云 COS** 图床（避免 QQ 拉取 Fandom 外链时出现 **850027** 富媒体上传超时）。主题图已打包在仓库 `assets/img/`（与 `THEME_FILES` 同名）；运行时从本地上传到 COS，**不会**在 VPS 上再去拉 Fandom（国内出口常对 `Special:FilePath` / wikia 返回 **403**）。未配置 COS 或上传失败时改为 **纯文字**（不再把 Fandom URL 交给 QQ）。
 
 | 命令组 | 图片策略 |
 |--------|----------|
@@ -110,8 +110,9 @@ QQ_BOT_SEND_IMAGES=1
 - 对象键前缀：`warframe-bot/img/`（例如 `warframe-bot/img/Void_Fissure.png`）。
 - 默认公网 URL：`https://{bucket}.cos.{region}.myqcloud.com/{key}`。
 - **必须**对 `warframe-bot/img/*` 允许公有读：上传时对象 ACL `public-read`，或桶策略放行该前缀；也可用 CDN 回源。
-- 首次可预热：`npm run sync-images-to-cos`（从 Fandom 拉取主题图并 PUT；已存在则跳过）。
-- 运行时若 COS 已启用且对象缺失，会尝试从原 Fandom URL 上传一次再返回 COS 链接；失败则回退原 URL / 文字。
+- 主题 PNG 位于 `assets/img/`（Docker 镜像已 `COPY assets/`）。构建机可从 `static.wikia.nocookie.net` 更新；运行时只读本地文件。
+- 首次可预热：`npm run sync-images-to-cos`（**优先**上传 `assets/img/*`；本地缺失时才回退 Fandom；COS 上已存在则跳过）。
+- 运行时：COS 启用且对象缺失 → `ensureObject` / `putObjectFromPath` 从本地资产上传；失败则 **跳过图片**（不返回 Fandom URL）。请确保 `warframe-bot/img/*` **公有读**。
 
 ## 要求
 

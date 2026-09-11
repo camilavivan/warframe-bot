@@ -4,14 +4,17 @@ import {
   cosKeyForFile,
   cosKeyFromSourceUrl,
   getPublicUrl,
+  hostImageUrl,
+  hostImages,
   isCosEnabled,
   isCosPublicUrl,
   resolveCosConfig,
+  resolveLocalAssetPath,
   resetCosState,
   COS_IMG_PREFIX,
 } from '../src/core/cos.js';
 import { resetConfigCache } from '../src/config.js';
-import { wikiImage } from '../src/core/images.js';
+import { THEME_FILES, wikiImage } from '../src/core/images.js';
 
 const ENV_KEYS = [
   'COS_SECRET_ID',
@@ -80,6 +83,18 @@ describe('COS URL builder / config (no real credentials)', () => {
     assert.equal(isCosEnabled(), false);
     const cfg = resolveCosConfig();
     assert.equal(cfg.enabled, false);
+  });
+
+  it('resolveLocalAssetPath finds bundled theme PNGs', () => {
+    const p = resolveLocalAssetPath(THEME_FILES.grineer);
+    assert.ok(p);
+    assert.match(p!, /Grineer\.png$/);
+  });
+
+  it('hostImageUrl / hostImages return null/[] when COS disabled (no Fandom leak)', async () => {
+    const src = wikiImage(THEME_FILES.grineer);
+    assert.equal(await hostImageUrl(src), null);
+    assert.deepEqual(await hostImages([src]), []);
   });
 
   it('enabled when env has id/key/bucket/region', () => {

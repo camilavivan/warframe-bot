@@ -1,7 +1,10 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
+import { existsSync } from 'node:fs';
+import { join } from 'node:path';
 import {
   STATIC_IMAGES,
+  THEME_FILES,
   factionImage,
   imagesForArchonHunt,
   imagesForCycle,
@@ -11,9 +14,11 @@ import {
   imagesForSortie,
   imagesForVoidTrader,
   itemImageFromName,
+  listThemeSourceUrls,
   resolveRewardImage,
   wikiImage,
 } from '../src/core/images.js';
+import { resolveLocalAssetPath } from '../src/core/cos.js';
 import { replyImages, replyText, toOneBotMessage } from '../src/commands/types.js';
 import { formatPushEvent } from '../src/core/formatters.js';
 import { PUSH_TOPICS, isPushTopic } from '../src/push/db.js';
@@ -26,29 +31,38 @@ describe('images helper', () => {
     assert.match(u, /Void_Fissure/);
   });
 
-  it('maps factions and archon bosses', async () => {
+  it('bundles THEME_FILES under assets/img as valid PNGs', () => {
+    for (const file of Object.values(THEME_FILES)) {
+      const p = resolveLocalAssetPath(file);
+      assert.ok(p, `missing asset for ${file}`);
+      assert.ok(existsSync(p!), p);
+      // Also reachable via cwd-relative path used in Docker
+      assert.ok(existsSync(join(process.cwd(), 'assets', 'img', file)));
+    }
+    const themes = listThemeSourceUrls();
+    assert.equal(themes.length, Object.keys(THEME_FILES).length);
+  });
+
+  it('maps factions and archon bosses (COS off → no remote Fandom URLs)', async () => {
     assert.equal(factionImage('Grineer'), STATIC_IMAGES.grineer);
     assert.equal(factionImage('Corpus'), STATIC_IMAGES.corpus);
     assert.equal(factionImage('Infestation'), STATIC_IMAGES.infested);
-    const amar = await imagesForArchonHunt({ boss: 'Archon Amar', faction: 'Narmer' });
-    assert.ok(amar.includes(STATIC_IMAGES.archonAmar));
-    const nira = await imagesForArchonHunt({ boss: 'Archon Nira' });
-    assert.ok(nira.includes(STATIC_IMAGES.archonNira));
+    // Without COS credentials, imagesFor* must not hand Fandom URLs to QQ
+    assert.deepEqual(await imagesForArchonHunt({ boss: 'Archon Amar', faction: 'Narmer' }), []);
+    assert.deepEqual(await imagesForArchonHunt({ boss: 'Archon Nira' }), []);
   });
 
-  it('sortie / fissure / trader / darvo / cycle thematic images', async () => {
-    assert.ok((await imagesForSortie({ faction: 'Grineer', variants: [{ node: 'a' }] })).length >= 1);
-    assert.deepEqual(await imagesForFissures(), [STATIC_IMAGES.voidFissure]);
-    assert.deepEqual(await imagesForVoidTrader(null), [STATIC_IMAGES.voidTrader]);
-    const deals = await imagesForDailyDeals([{ item: 'Orokin Catalyst' }]);
-    assert.ok(deals.length >= 1);
-    assert.ok(deals.every((u) => u.startsWith('https://')));
-    assert.deepEqual(await imagesForCycle('cetus'), [STATIC_IMAGES.plains]);
-    assert.deepEqual(await imagesForCycle('vallis'), [STATIC_IMAGES.vallis]);
-    assert.deepEqual(await imagesForCycle('zariman'), [STATIC_IMAGES.voidFissure]);
+  it('sortie / fissure / trader / darvo / cycle return [] when COS disabled', async () => {
+    assert.deepEqual(await imagesForSortie({ faction: 'Grineer', variants: [{ node: 'a' }] }), []);
+    assert.deepEqual(await imagesForFissures(), []);
+    assert.deepEqual(await imagesForVoidTrader(null), []);
+    assert.deepEqual(await imagesForDailyDeals([{ item: 'Orokin Catalyst' }]), []);
+    assert.deepEqual(await imagesForCycle('cetus'), []);
+    assert.deepEqual(await imagesForCycle('vallis'), []);
+    assert.deepEqual(await imagesForCycle('zariman'), []);
   });
 
-  it('invasion rewards prefer mapped wiki over broken warframestat img CDN', async () => {
+  it('invasion rewards prefer mapped wiki over broken warframestat img CDN (COS off → [])', async () => {
     const imgs = await imagesForInvasions([
       {
         completed: false,
@@ -64,9 +78,14 @@ describe('images helper', () => {
         },
       },
     ]);
-    assert.ok(imgs.length >= 1);
-    assert.ok(imgs.every((u) => u.startsWith('https://')));
-    assert.ok(!imgs.some((u) => /cdn\.warframestat\.us\/img\//.test(u)));
+    assert.deepEqual(imgs, []);
+    // Mapping helpers still resolve to wiki (for COS key / sync), not warframestat CDN
+    const mapped = resolveRewardImage({
+      asString: '电磁力场装置×3',
+      thumbnail: 'https://cdn.warframestat.us/img/fieldron.png',
+    });
+    assert.ok(mapped);
+    assert.ok(!/cdn\.warframestat\.us\/img\//.test(mapped!));
   });
 
   it('resolveRewardImage / itemImageFromName', () => {
