@@ -84,6 +84,12 @@ const ConfigSchema = z.object({
       /** Kept for config compatibility; SDK sandbox flag is deprecated but still accepted */
       sandbox: z.boolean().default(true),
       removeAt: z.boolean().default(true),
+      /**
+       * Attach HTTPS images via segment.image (QQ uploads by URL).
+       * Fandom/外链在国内常导致 850027 富媒体上传超时；失败会自动回退纯文字。
+       * 设 false 可彻底关闭配图。环境变量 QQ_BOT_SEND_IMAGES=0/1 可覆盖。
+       */
+      sendImages: z.boolean().default(true),
       mode: z.enum(['websocket', 'webhook']).default('websocket'),
       webhookPort: z.number().default(9000),
       webhookPath: z.string().default('/qqbot/webhook'),

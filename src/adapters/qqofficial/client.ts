@@ -49,17 +49,27 @@ function createBot(cfg: AppConfig['qqofficial']): AnyBot {
 }
 
 
-async function replyQQ(event: { reply: (msg: unknown) => Promise<unknown> }, payload: ReplyPayload): Promise<void> {
+async function replyQQ(
+  event: { reply: (msg: unknown) => Promise<unknown> },
+  payload: ReplyPayload,
+  sendImages: boolean,
+): Promise<void> {
   const text = replyText(payload);
-  const images = replyImages(payload);
+  const images = sendImages ? replyImages(payload) : [];
   if (!images.length) {
     await event.reply(text);
     return;
   }
-  await event.reply([...images.map((url) => segment.image(url)), segment.text(text)]);
+  try {
+    await event.reply([...images.map((url) => segment.image(url)), segment.text(text)]);
+  } catch (err) {
+    // QQ 850027 富媒体上传超时等：外链图不可达时仍要回文字
+    log.warn({ err, imageCount: images.length }, 'QQ image reply failed; falling back to text');
+    await event.reply(text);
+  }
 }
 
-function wireDispatch(bot: AnyBot): void {
+function wireDispatch(bot: AnyBot, sendImages: boolean): void {
   bot.on('message.group', (event: GroupMessageEvent) => {
     const text = String(event.raw_message ?? '').trim();
     const userId = String(event.user_id ?? '');
@@ -75,7 +85,7 @@ function wireDispatch(bot: AnyBot): void {
       text,
       // Passive reply keeps msg_id — required by QQ Open Platform for group @ replies
       reply: async (msg) => {
-        await replyQQ(event, msg);
+        await replyQQ(event, msg, sendImages);
       },
     }).catch((err) => log.error({ err }, 'dispatch error'));
   });
@@ -93,7 +103,7 @@ function wireDispatch(bot: AnyBot): void {
       userId,
       text,
       reply: async (msg) => {
-        await replyQQ(event, msg);
+        await replyQQ(event, msg, sendImages);
       },
     }).catch((err) => log.error({ err }, 'dispatch error'));
   });
@@ -105,13 +115,14 @@ export async function startQQOfficial(cfg: AppConfig['qqofficial']): Promise<QQO
   }
 
   const bot = createBot(cfg);
-  wireDispatch(bot);
+  wireDispatch(bot, cfg.sendImages !== false);
 
   await bot.start();
   log.info(
     {
       mode: cfg.mode,
       sandbox: cfg.sandbox,
+      sendImages: cfg.sendImages !== false,
       webhookPort: cfg.mode === 'webhook' ? cfg.webhookPort : undefined,
       webhookPath: cfg.mode === 'webhook' ? cfg.webhookPath : undefined,
     },

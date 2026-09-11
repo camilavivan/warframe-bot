@@ -78,6 +78,7 @@ qqofficial:
   secret: ""              # 或环境变量 QQ_BOT_SECRET
   sandbox: true           # 首次建议 true（沙箱群验证）
   removeAt: true          # 分发前去掉 @机器人
+  sendImages: true        # 查询配图；外链超时会回退文字。国内不稳可 false 或 QQ_BOT_SEND_IMAGES=0
   # mode: websocket       # websocket（默认）| webhook
   # webhookPort: 9000
   # webhookPath: /qqbot/webhook
