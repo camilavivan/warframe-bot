@@ -1,4 +1,5 @@
 import { registerCommand } from './registry.js';
+import type { CommandContext } from './types.js';
 import { loadConfig } from '../config.js';
 import {
   fetchAlerts,
@@ -44,6 +45,7 @@ import {
   formatDuviri,
   formatEvents,
   formatFissures,
+  chunkMessage,
   formatInvasions,
   formatMenu,
   formatNews,
@@ -141,6 +143,15 @@ export function registerAllCommands(): void {
     },
   });
 
+  async function replyFissureChunks(ctx: CommandContext, text: string): Promise<void> {
+    const chunks = chunkMessage(text);
+    const images = imagesForFissures();
+    for (let i = 0; i < chunks.length; i++) {
+      if (i === 0) await ctx.reply({ text: chunks[i], images });
+      else await ctx.reply(chunks[i]);
+    }
+  }
+
   registerCommand({
     name: '裂缝',
     aliases: ['fissure', 'fissures', '裂隙', '虚空裂缝'],
@@ -149,7 +160,7 @@ export function registerAllCommands(): void {
       const all = await fetchFissures();
       const { filter, title } = parseFissureArgs(ctx.args);
       const filtered = filterFissures(all, filter);
-      await ctx.reply({ text: formatFissures(filtered, title), images: imagesForFissures() });
+      await replyFissureChunks(ctx, formatFissures(filtered, title));
     },
   });
 
@@ -160,7 +171,7 @@ export function registerAllCommands(): void {
     async handle(ctx) {
       const all = await fetchFissures();
       const hard = filterFissures(all, { hard: true });
-      await ctx.reply({ text: formatFissures(hard, '钢铁裂缝'), images: imagesForFissures() });
+      await replyFissureChunks(ctx, formatFissures(hard, '钢铁裂缝'));
     },
   });
 
@@ -171,7 +182,7 @@ export function registerAllCommands(): void {
     async handle(ctx) {
       const all = await fetchFissures();
       const storm = filterFissures(all, { storm: true });
-      await ctx.reply({ text: formatFissures(storm, '虚空风暴'), images: imagesForFissures() });
+      await replyFissureChunks(ctx, formatFissures(storm, '虚空风暴'));
     },
   });
 

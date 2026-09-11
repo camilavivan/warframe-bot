@@ -263,14 +263,35 @@ export function formatFissures(list: Fissure[], title = '裂缝'): string {
   const active = filterFissures(list);
   if (!active.length) return `当前无${title}。`;
   const lines = [`【${title}】共 ${active.length} 个`];
-  for (const f of active.slice(0, 20)) {
+  for (const f of active) {
     const tags = [f.isHard ? '钢铁' : '', f.isStorm ? '风暴' : ''].filter(Boolean).join('/');
     lines.push(
       `· ${f.tier ?? '?'} | ${zhNode(f.node)} | ${zh(f.missionType)} | ${zh(f.enemy)}${tags ? ` [${tags}]` : ''} · ${formatEta(f.eta, f.expiry)}`,
     );
   }
-  if (active.length > 20) lines.push(`…另有 ${active.length - 20} 个`);
   return lines.join('\n');
+}
+
+/**
+ * Split a multi-line message into QQ length-safe chunks.
+ * Keeps the first line as header on every part, with （i/n） when paginated.
+ * `maxLines` is body lines per chunk (default 17 ≈ 16–18).
+ */
+export function chunkMessage(text: string, opts?: { maxLines?: number }): string[] {
+  const maxBody = opts?.maxLines ?? 17;
+  if (!text) return [text];
+  const lines = text.split('\n');
+  if (lines.length <= 1) return [text];
+  const header = lines[0];
+  const body = lines.slice(1);
+  if (body.length <= maxBody) return [text];
+  const total = Math.ceil(body.length / maxBody);
+  const chunks: string[] = [];
+  for (let i = 0; i < total; i++) {
+    const part = body.slice(i * maxBody, (i + 1) * maxBody);
+    chunks.push([`${header}（${i + 1}/${total}）`, ...part].join('\n'));
+  }
+  return chunks;
 }
 
 export function formatInvasions(list: Invasion[]): string {

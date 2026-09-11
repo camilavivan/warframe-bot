@@ -6,6 +6,7 @@ import {
   formatEta,
   formatSortie,
   formatFissures,
+  chunkMessage,
 } from '../src/core/formatters.js';
 import type { Fissure, Sortie } from '../src/core/warframestat.js';
 
@@ -99,5 +100,68 @@ describe('filterFissures', () => {
     const text = formatFissures(filterFissures(sample, { hard: true }), '钢铁裂缝');
     assert.match(text, /钢铁裂缝/);
     assert.match(text, /Meso/);
+  });
+});
+
+
+describe('formatFissures full list', () => {
+  it('includes all items when >20 (no …另有 cap)', () => {
+    const list: Fissure[] = Array.from({ length: 25 }, (_, i) => ({
+      id: `f${i}`,
+      tier: 'Lith',
+      tierNum: 1,
+      node: `Node${i}`,
+      missionType: '捕获',
+      enemy: 'Grineer',
+      isHard: false,
+      isStorm: false,
+      expiry: new Date(Date.now() + 3600_000).toISOString(),
+    }));
+    const text = formatFissures(list, '裂缝');
+    assert.match(text, /共 25 个/);
+    assert.doesNotMatch(text, /另有/);
+    for (let i = 0; i < 25; i++) {
+      assert.match(text, new RegExp(`Node${i}`));
+    }
+    const bodyLines = text.split('\n').slice(1);
+    assert.equal(bodyLines.length, 25);
+  });
+});
+
+describe('chunkMessage', () => {
+  it('returns single chunk when short', () => {
+    const text = ['【裂缝】共 3 个', '· a', '· b', '· c'].join('\n');
+    const parts = chunkMessage(text, { maxLines: 17 });
+    assert.equal(parts.length, 1);
+    assert.equal(parts[0], text);
+    assert.doesNotMatch(parts[0], /（\d+\/\d+）/);
+  });
+
+  it('paginates with header （i/n） and default ~17 body lines', () => {
+    const body = Array.from({ length: 40 }, (_, i) => `· item${i}`);
+    const text = ['【裂缝】共 40 个', ...body].join('\n');
+    const parts = chunkMessage(text); // default maxLines 17
+    assert.equal(parts.length, 3); // 17+17+6
+    assert.match(parts[0], /^【裂缝】共 40 个（1\/3）/);
+    assert.match(parts[1], /^【裂缝】共 40 个（2\/3）/);
+    assert.match(parts[2], /^【裂缝】共 40 个（3\/3）/);
+    assert.match(parts[0], /item0/);
+    assert.match(parts[0], /item16/);
+    assert.doesNotMatch(parts[0], /item17/);
+    assert.match(parts[1], /item17/);
+    assert.match(parts[2], /item39/);
+    // each part: header + <=17 body
+    for (const p of parts) {
+      assert.ok(p.split('\n').length <= 18);
+    }
+  });
+
+  it('respects custom maxLines', () => {
+    const body = Array.from({ length: 10 }, (_, i) => `· x${i}`);
+    const text = ['HDR', ...body].join('\n');
+    const parts = chunkMessage(text, { maxLines: 4 });
+    assert.equal(parts.length, 3); // 4+4+2
+    assert.match(parts[0], /^HDR（1\/3）/);
+    assert.equal(parts[0].split('\n').length, 5);
   });
 });

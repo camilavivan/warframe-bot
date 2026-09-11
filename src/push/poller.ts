@@ -14,6 +14,7 @@ import {
   formatCalendar,
   formatDailyDeals,
   formatFissures,
+  chunkMessage,
   formatInvasions,
   formatPushEvent,
   formatPushCetusNight,
@@ -107,7 +108,9 @@ async function broadcast(
     try {
       const payload = adaptText ? adaptText(s, text) : text;
       if (payload == null || payload === '') continue;
-      await send(s.platform, s.chatId, payload, s.chatType);
+      for (const part of chunkMessage(payload)) {
+        await send(s.platform, s.chatId, part, s.chatType);
+      }
     } catch (err) {
       log.error({ err, platform: s.platform, chatId: s.chatId, chatType: s.chatType }, 'send failed');
     }
